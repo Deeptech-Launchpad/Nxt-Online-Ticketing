@@ -1,0 +1,12 @@
+{
+  "name": "nxt-online-ticketing",
+  "version": "1.0.0",
+  "description": "Master launcher for AltiusNXT Online Ticketing system",
+  "scripts": {
+    "dev": "concurrently \"cd helpdesk-backend && node server.js\" \"cd helpdesk-react && npm run dev\"",
+    "install-all": "npm install && cd helpdesk-backend && npm install && cd ../helpdesk-react && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
