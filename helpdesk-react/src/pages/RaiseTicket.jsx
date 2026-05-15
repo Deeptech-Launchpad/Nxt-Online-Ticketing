@@ -1,234 +1,788 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+﻿import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { showToast } from '../components/Toast';
-import CustomSelect from '../components/CustomSelect';
 
-const DIVISIONS = ['Guntur -AndhraPradesh', 'RS Puram Coimbatore', 'Saibaba Colony-Coimbatore', 'Thudiyalur-coimbatore', 'WFH'];
-const CATS     = ['Hardware','Software','Network','Access / Login','Email','Printer','Other'];
-const REMOTES  = [
-  { key:'In Person',  label:'In Person',  sub:'On-site visit', icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" width={16} height={16}><circle cx="8" cy="5" r="2.5"/><path d="M3 14c0-2.8 2.2-5 5-5s5 2.2 5 5" strokeLinecap="round"/></svg> },
-  { key:'Over Phone', label:'Over Phone', sub:'Call support',   icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" width={16} height={16}><path d="M3 2h3l1.5 3-2 1.5a8.4 8.4 0 004 4L11 9l3 1.5V13a1 1 0 01-1 1C7.5 14 2 8.5 2 3a1 1 0 011-1z" strokeLinecap="round" strokeLinejoin="round"/></svg> },
-  { key:'AnyDesk',    label:'AnyDesk',    sub:'Fast & light',  icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" width={16} height={16}><rect x="1" y="3" width="14" height="9" rx="2"/><line x1="5" y1="12" x2="5" y2="14" strokeLinecap="round"/><line x1="11" y1="12" x2="11" y2="14" strokeLinecap="round"/><line x1="3" y1="14" x2="13" y2="14" strokeLinecap="round"/></svg> },
-  { key:'UltraViewer',label:'UltraViewer',sub:'Simple',        icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" width={16} height={16}><rect x="1" y="3" width="14" height="9" rx="2"/><circle cx="8" cy="7.5" r="2.5"/></svg> },
-  { key:'TeamViewer', label:'TeamViewer', sub:'Enterprise',    icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" width={16} height={16}><rect x="1" y="3" width="14" height="9" rx="2"/><line x1="5" y1="7.5" x2="11" y2="7.5" strokeLinecap="round"/><line x1="8" y1="4.5" x2="8" y2="10.5" strokeLinecap="round"/></svg> },
+const RED   = '#CC3A3A';
+const NAVY  = '#02172E';
+const GREEN = '#16a34a';
+const AMBER = '#F59E0B';
+
+/* â”€â”€ CATEGORY CARDS (Step 1) â”€â”€ */
+const CATEGORIES = [
+  { id: 'Hardware',  label: 'Laptop or Desktop', icon: 'laptop' },
+  { id: 'Software',  label: 'Software Error',    icon: 'code' },
+  { id: 'Network',   label: 'Internet or Network', icon: 'wifi' },
+  { id: 'Email',     label: 'Email',             icon: 'mail' },
+  { id: 'Printer',   label: 'Printer',           icon: 'print' },
+  { id: 'Other',     label: 'Other',             icon: 'more_horiz' },
 ];
 
-function StepCircle({ n, step }) {
-  const state = n < step ? 'done' : n === step ? 'current' : 'todo';
-  return (
-    <div className={`step-circle ${state}`}>
-      {state === 'done'
-        ? <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 6l3 3 6-5"/></svg>
-        : n
-      }
-    </div>
-  );
-}
+const PRIORITIES = [
+  { id: 'Low',    icon: 'inbox',    desc: 'No rush, whenever possible',  color: GREEN, bg: '#f0fdf4' },
+  { id: 'Medium', icon: 'info',     desc: 'Impacting my daily work',     color: AMBER, bg: '#fffbeb' },
+  { id: 'High',   icon: 'warning',  desc: 'Completely blocked, urgent',  color: '#dc2626', bg: '#fef2f2' },
+];
+
+/*
+  PLACEHOLDER DEVICE LIST â€” same shape as MyAssets.
+  Real endpoint will be: GET /api/assets/me
+*/
+const PLACEHOLDER_DEVICES = [
+  { id: 'AST-2022-094', name: 'Dell Latitude 5520', icon: 'laptop',     serial: 'DL55-9012',  date: 'Oct 15, 2022', warranty: 'Valid till Dec 2025', condition: 'Good', categories: ['Hardware', 'Network', 'Other'] },
+  { id: 'AST-2023-112', name: 'iPhone 14 Pro',      icon: 'smartphone', serial: 'IP14-4421',  date: 'Jan 10, 2023', warranty: 'Expiring Soon',       condition: 'Good', categories: ['Hardware', 'Other'] },
+  { id: 'AST-2022-401', name: 'Dell UltraSharp 27"', icon: 'monitor',   serial: 'DU27-8891',  date: 'Oct 15, 2022', warranty: 'Valid till Dec 2025', condition: 'Good', categories: ['Hardware'] },
+  { id: 'LIC-2024-001', name: 'MS Office 365',      icon: 'apps',       serial: 'OFF365-PBK', date: 'Apr 01, 2024', warranty: 'Valid till Apr 2025', condition: 'Active', categories: ['Software', 'Email'] },
+  { id: 'LIC-2024-002', name: 'Adobe Creative Cloud', icon: 'palette',  serial: 'ACC-9912',   date: 'Jun 15, 2024', warranty: 'Valid till Jun 2025', condition: 'Active', categories: ['Software'] },
+  { id: 'NET-2024-003', name: 'VPN Access',          icon: 'vpn_lock',  serial: 'VPN-PBK',    date: 'Jan 01, 2024', warranty: 'Active',              condition: 'Active', categories: ['Network'] },
+  { id: 'GEN-0000',     name: 'Other / Not Listed',  icon: 'help',      serial: 'N/A',        date: 'N/A',          warranty: 'N/A',                 condition: 'N/A',    categories: ['Hardware', 'Software', 'Network', 'Email', 'Printer', 'Other'] },
+];
+
+const REMOTES = [
+  { id: 'In Person',   icon: 'person',           sub: 'On-site visit' },
+  { id: 'Over Phone',  icon: 'phone_in_talk',    sub: 'Call support' },
+  { id: 'AnyDesk',     icon: 'screen_share',     sub: 'Fast & light' },
+  { id: 'UltraViewer', icon: 'connected_tv',     sub: 'Simple' },
+  { id: 'TeamViewer',  icon: 'desktop_windows',  sub: 'Enterprise' },
+];
+
+const TIME_SLOTS = [
+  '9 AM â€“ 10 AM', '10 AM â€“ 11 AM', '11 AM â€“ 12 PM',
+  '12 PM â€“ 1 PM', '1 PM â€“ 2 PM',   '2 PM â€“ 3 PM',
+  '3 PM â€“ 4 PM',  '4 PM â€“ 5 PM',   'Any Time',
+];
+
+const STEPS = ['Issue Details', 'Device & Asset', 'Remote Access', 'Review'];
 
 export default function RaiseTicket() {
   const { currentUser, submitTicket } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
+
   const [step, setStep] = useState(1);
+  const [success, setSuccess] = useState(null);
 
-  // Step 1 state
-  const [division, setDivision]     = useState(currentUser?.division || '');
-  const [category, setCategory] = useState('');
+  // Step 1
   const [subject, setSubject]   = useState('');
+  const [category, setCategory] = useState('Hardware');
+  const [priority, setPriority] = useState('Low');
   const [desc, setDesc]         = useState('');
-  const [priority, setPriority] = useState('');
-  const [device, setDevice]     = useState('');
-
-  // Step 2 state
-  const [remote, setRemote]   = useState('In Person');
-  const [preferredTime, setPreferredTime] = useState('');
   const [fileName, setFileName] = useState('');
+  const [attachmentFile, setAttachmentFile] = useState(null);
+
+  // Step 2
+  const [selectedDevice, setSelectedDevice] = useState(null); // device object
+  const [deviceNotes, setDeviceNotes]       = useState('');
+
+  // Step 3
+  const [remote, setRemote]         = useState('In Person');
+  const [timeSlot, setTimeSlot]     = useState('Any Time');
+
+  // Pre-fill from "Raise ticket for this device" link
+  useEffect(() => {
+    const incoming = location.state;
+    if (incoming?.device) {
+      const match = PLACEHOLDER_DEVICES.find(d => d.id === incoming.assetId) ||
+                    PLACEHOLDER_DEVICES.find(d => d.name === incoming.device);
+      if (match) setSelectedDevice(match);
+    }
+  }, [location.state]);
+
+  const filteredDevices = PLACEHOLDER_DEVICES.filter(d => d.categories.includes(category));
 
   const goStep = (n) => {
-    if (n === 2 && step === 1) {
-      if (!subject.trim() || !desc.trim()) { showToast('Please fill in Issue and Issue Detail', 'error'); return; }
+    if (n === 2 && !subject.trim()) {
+      showToast('Please enter what the problem is', 'error');
+      return;
+    }
+    if (n === 2 && !desc.trim()) {
+      showToast('Please describe the issue', 'error');
+      return;
     }
     setStep(n);
-    window.scrollTo(0,0);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSubmit = () => {
-    const id = submitTicket({ division, category, subject, desc, priority: priority||'Medium', device, remote, preferredTime }, currentUser);
-    showToast(`Ticket #${id} submitted!`, 'success');
-    navigate('/dashboard');
+  const handleSubmit = async () => {
+    const id = await submitTicket({
+      division: currentUser?.division || '',
+      category,
+      subject,
+      desc,
+      priority,
+      device: selectedDevice ? `${selectedDevice.name} (${selectedDevice.id})` : '',
+      remote,
+      preferredTime: timeSlot,
+      deviceNotes,
+      attachmentFile,
+    }, currentUser);
+
+    if (id) {
+      setSuccess(id);
+    } else {
+      showToast('Failed to submit ticket. Please try again.', 'error');
+    }
   };
 
-
-  const stepLabels = ['Issue Details','Remote & Files','Review'];
+  if (success) {
+    return <SuccessCard ticketId={success} onAnother={() => { setSuccess(null); setStep(1); }} onView={() => navigate('/history')} />;
+  }
 
   return (
-    <div className="page-fade">
-      <div className="breadcrumb">
-        <a onClick={()=>navigate('/dashboard')}>Dashboard</a>
-        <span className="breadcrumb-sep">›</span>
-        <span>Raise Ticket</span>
-      </div>
-      <div className="page-header" style={{marginBottom:20}}>
-        <div>
-          <div className="page-title">Raise a Support Ticket</div>
-          <div className="page-sub">Fill in the details below to get help from IT admin</div>
-        </div>
+    <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: 1100, margin: '0 auto' }}>
+      {/* BREADCRUMB */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        fontSize: 12, color: 'var(--text-muted)', marginBottom: 18,
+      }}>
+        <a onClick={() => navigate('/dashboard')} style={{ color: 'var(--text-muted)', cursor: 'pointer' }}>Dashboard</a>
+        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>chevron_right</span>
+        <span>Raise New Ticket</span>
       </div>
 
-      {/* Stepper */}
-      <div style={{marginBottom:28}}>
-        <div className="stepper">
-          {[1,2,3].map((n,i)=>(
-            <div key={n} className="step-item" style={i===2?{flex:'0 0 auto'}:{}}>
-              <StepCircle n={n} step={step}/>
-              {i<2 && <div className={`step-line ${n<step?'done':''}`}/>}
-            </div>
-          ))}
-        </div>
-        <div style={{display:'flex',justifyContent:'space-between',marginTop:6}}>
-          {stepLabels.map((l,i)=>(
-            <span key={l} style={{fontSize:12,fontWeight:600,color:i+1===step?'var(--blue-light)':'var(--text-muted)'}}>{l}</span>
-          ))}
-        </div>
+      {/* STEP INDICATOR */}
+      <StepIndicator step={step} />
+
+      {/* STEPS */}
+      <div style={{
+        background: 'var(--white)', borderRadius: 12,
+        border: '1px solid var(--slate)', padding: 28,
+        boxShadow: 'var(--shadow-sm)',
+      }}>
+        {step === 1 && (
+          <Step1
+            subject={subject} setSubject={setSubject}
+            category={category} setCategory={setCategory}
+            priority={priority} setPriority={setPriority}
+            desc={desc} setDesc={setDesc}
+            fileName={fileName} setFileName={setFileName}
+            setAttachmentFile={setAttachmentFile}
+            onNext={() => goStep(2)}
+          />
+        )}
+        {step === 2 && (
+          <Step2
+            devices={filteredDevices}
+            selected={selectedDevice} setSelected={setSelectedDevice}
+            notes={deviceNotes} setNotes={setDeviceNotes}
+            onBack={() => goStep(1)}
+            onNext={() => goStep(3)}
+          />
+        )}
+        {step === 3 && (
+          <Step3
+            remote={remote} setRemote={setRemote}
+            timeSlot={timeSlot} setTimeSlot={setTimeSlot}
+            onBack={() => goStep(2)}
+            onNext={() => goStep(4)}
+          />
+        )}
+        {step === 4 && (
+          <Step4
+            subject={subject} category={category} priority={priority} desc={desc}
+            device={selectedDevice} remote={remote} timeSlot={timeSlot}
+            goStep={goStep}
+            onSubmit={handleSubmit}
+          />
+        )}
       </div>
-
-      {/* Step 1 */}
-      {step===1 && (
-        <>
-          <div className="form-section">
-            <div className="form-section-title">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width={16} height={16}><rect x="2" y="2" width="12" height="12" rx="2"/><line x1="5" y1="6" x2="11" y2="6"/><line x1="5" y1="10" x2="8" y2="10"/></svg>
-              Basic Information
-            </div>
-            <div className="form-grid-2">
-              <div className="form-group-light"><label className="form-label-light">Division</label>
-                <CustomSelect value={division} onChange={setDivision} options={DIVISIONS} placeholder="Select division" className="form-select-light" />
-              </div>
-              <div className="form-group-light"><label className="form-label-light">Issue Category</label>
-                <CustomSelect value={category} onChange={setCategory} options={CATS} placeholder="Select category" className="form-select-light" />
-              </div>
-            </div>
-            <div className="form-group-light">
-              <label className="form-label-light">Issue <span style={{color:'var(--danger)'}}>*</span></label>
-              <input className="form-input-light" placeholder="Brief description of your issue" maxLength={100} value={subject} onChange={e=>setSubject(e.target.value)}/>
-            </div>
-            <div className="form-group-light">
-              <label className="form-label-light">Issue Detail <span style={{color:'var(--danger)'}}>*</span></label>
-              <textarea className="form-textarea-light" maxLength={600} rows={4}
-                placeholder="Describe the issue in detail…" value={desc} onChange={e=>setDesc(e.target.value)}/>
-              <div className="char-count">{desc.length} / 600</div>
-            </div>
-            <div className="form-grid-2">
-              <div className="form-group-light"><label className="form-label-light">Priority</label>
-                <div className="priority-grid">
-                  {['Low','Medium','High','Very High'].map(p=>(
-                    <button key={p} className={`priority-btn${priority===p?` active-${p.toLowerCase().replace(' ','-')}`:''}`} onClick={()=>setPriority(p)}>{p}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="form-group-light"><label className="form-label-light">Device / Asset Tag</label>
-                <input className="form-input-light" placeholder="e.g. PC-CHN-045" value={device} onChange={e=>setDevice(e.target.value)}/>
-              </div>
-            </div>
-          </div>
-          <div className="form-actions">
-            <button className="btn btn-outline" style={{color:'var(--text-secondary)',borderColor:'var(--slate)'}} onClick={()=>navigate('/dashboard')}>Cancel</button>
-            <button className="btn btn-primary" onClick={()=>goStep(2)}>Next: Remote & Files →</button>
-          </div>
-        </>
-      )}
-
-      {/* Step 2 */}
-      {step===2 && (
-        <>
-          <div className="form-section">
-            <div className="form-section-title">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width={16} height={16}><rect x="1" y="4" width="14" height="9" rx="2"/><line x1="5" y1="13" x2="5" y2="15" strokeLinecap="round"/><line x1="11" y1="13" x2="11" y2="15" strokeLinecap="round"/><line x1="3" y1="15" x2="13" y2="15" strokeLinecap="round"/></svg>
-              Remote Access Preference
-            </div>
-            <p style={{fontSize:14,color:'var(--text-muted)',marginBottom:16}}>Allow the admin to connect remotely and fix your issue faster.</p>
-            <div className="remote-grid">
-              {REMOTES.map(r=>(
-                <div key={r.key} className={`remote-btn${remote===r.key?' active':''}`} onClick={()=>setRemote(r.key)}>
-                  <div className="remote-btn-icon">{r.icon}</div>
-                  <div className="remote-btn-label">{r.label}</div>
-                  <div className="remote-btn-sub">{r.sub}</div>
-                </div>
-              ))}
-            </div>
-            {!['In Person','Over Phone'].includes(remote) && (
-              <div className="info-banner" style={{marginTop:12}}>
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" width={15} height={15}><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11" strokeLinecap="round"/><circle cx="8" cy="5.5" r="0.8" fill="currentColor"/></svg>
-                Share your remote ID with the admin <strong>only when they contact you</strong>.
-              </div>
-            )}
-            <div style={{marginTop:20}}>
-              <div className="form-section-title" style={{marginBottom:12}}>
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width={16} height={16}><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="8" strokeLinecap="round"/><line x1="8" y1="8" x2="10.5" y2="9.5" strokeLinecap="round"/></svg>
-                Preferred Time Slot
-              </div>
-              <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:12}}>When would you like the admin to reach you?</p>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8}}>
-                {['9 AM – 10 AM','10 AM – 11 AM','11 AM – 12 PM','12 PM – 1 PM','1 PM – 2 PM','2 PM – 3 PM','3 PM – 4 PM','4 PM – 5 PM','Any Time'].map(slot=>(
-                  <button key={slot} onClick={()=>setPreferredTime(slot)} style={{
-                    padding:'10px 8px',borderRadius:'var(--radius-md)',fontSize:13,fontWeight:600,
-                    border: preferredTime===slot ? '1.5px solid var(--blue-light)' : '1.5px solid var(--slate)',
-                    background: preferredTime===slot ? 'var(--blue-pale)' : 'var(--white)',
-                    color: preferredTime===slot ? 'var(--blue-light)' : 'var(--text-secondary)',
-                    cursor:'pointer',transition:'all 0.15s',display:'flex',alignItems:'center',justifyContent:'center',gap:6
-                  }}>
-                    {slot==='Any Time' && <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" width={13} height={13}><circle cx="7" cy="7" r="5.5"/><line x1="7" y1="4" x2="7" y2="7" strokeLinecap="round"/><line x1="7" y1="7" x2="9" y2="8.5" strokeLinecap="round"/></svg>}
-                    {slot}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="form-section">
-            <div className="form-section-title">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width={16} height={16}><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M5 7l2 2 4-4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              Attachment (Optional)
-            </div>
-            <label className="drop-zone" style={{display:'block'}}>
-              <input type="file" style={{display:'none'}} onChange={e=>setFileName(e.target.files?.[0]?.name||'')}/>
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><rect x="4" y="4" width="20" height="20" rx="4"/><line x1="14" y1="10" x2="14" y2="18" strokeLinecap="round"/><line x1="10" y1="14" x2="18" y2="14" strokeLinecap="round"/></svg>
-              <p>Drag & drop or <span style={{color:'var(--blue)',fontWeight:500}}>browse</span> to upload</p>
-              <p style={{fontSize:12,marginTop:2}}>PNG, JPG, PDF — max 5MB</p>
-            </label>
-            {fileName && <div style={{marginTop:10,fontSize:14}}><span style={{background:'var(--blue-pale)',color:'var(--blue)',padding:'4px 10px',borderRadius:4}}>📎 {fileName}</span></div>}
-          </div>
-          <div className="form-actions">
-            <button className="btn btn-outline" style={{color:'var(--text-secondary)',borderColor:'var(--slate)'}} onClick={()=>goStep(1)}>← Back</button>
-            <div style={{display:'flex',gap:10}}>
-              <button className="btn btn-outline" style={{color:'var(--text-secondary)',borderColor:'var(--slate)'}} onClick={()=>showToast('Draft saved','success')}>Save Draft</button>
-              <button className="btn btn-primary" onClick={()=>goStep(3)}>Next: Review →</button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Step 3: Review */}
-      {step===3 && (
-        <>
-          <div className="form-section">
-            <div className="form-section-title">Review Your Ticket</div>
-            <div style={{fontSize:16,fontWeight:600,color:'var(--navy)',marginBottom:14}}>{subject}</div>
-            <div style={{background:'var(--off-white)',borderRadius:'var(--radius-md)',padding:14,fontSize:15,color:'var(--text-primary)',lineHeight:1.7,marginBottom:16}}>{desc}</div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-              {[['Division',division||'Not selected'],['Issue Category',category||'Not selected'],['Priority',priority||'Medium'],['Device',device||'—'],['Remote',remote],['Preferred Time',preferredTime||'Not set'],['Attachment',fileName||'None']].map(([k,v])=>(
-                <div key={k} style={{padding:'9px 12px',background:'var(--off-white)',borderRadius:'var(--radius-md)'}}>
-                  <div style={{fontSize:12,fontWeight:600,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.3px',marginBottom:2}}>{k}</div>
-                  <div style={{fontSize:14,color:'var(--text-primary)',fontWeight:500}}>{v}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="form-actions">
-            <button className="btn btn-outline" style={{color:'var(--text-secondary)',borderColor:'var(--slate)'}} onClick={()=>goStep(2)}>← Back</button>
-            <button className="btn btn-primary" onClick={handleSubmit}>Submit Ticket</button>
-          </div>
-        </>
-      )}
     </div>
   );
 }
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ STEP INDICATOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function StepIndicator({ step }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0, marginBottom: 32,
+    }}>
+      {STEPS.map((label, idx) => {
+        const n = idx + 1;
+        const state = n < step ? 'done' : n === step ? 'active' : 'todo';
+        const color = state === 'done' || state === 'active' ? RED : 'var(--slate)';
+        return (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', flex: idx === STEPS.length - 1 ? '0 0 auto' : 1 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 700, fontSize: 13,
+                background: state === 'done' ? RED : 'transparent',
+                border: `2px solid ${color}`,
+                color: state === 'done' ? '#fff' : color,
+              }}>
+                {state === 'done'
+                  ? <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check</span>
+                  : n}
+              </div>
+              <div style={{
+                fontSize: 10, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.5px',
+              }}>
+                {label}
+              </div>
+            </div>
+            {idx < STEPS.length - 1 && (
+              <div style={{
+                flex: 1, maxWidth: 160, height: 2,
+                background: n < step ? RED : 'var(--slate)',
+                margin: '0 12px', marginTop: -22,
+              }} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ STEP 1 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function Step1({ subject, setSubject, category, setCategory, priority, setPriority, desc, setDesc, fileName, setFileName, setAttachmentFile, onNext }) {
+  return (
+    <>
+      <FormGroup label="What is the problem?">
+        <input
+          value={subject} onChange={e => setSubject(e.target.value)}
+          placeholder="e.g. Laptop not turning on"
+          style={inputStyle}
+        />
+      </FormGroup>
+
+      <FormGroup label="Category">
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {CATEGORIES.map(c => (
+            <CategoryCard
+              key={c.id}
+              icon={c.icon} label={c.label}
+              active={category === c.id}
+              onClick={() => setCategory(c.id)}
+            />
+          ))}
+        </div>
+      </FormGroup>
+
+      <FormGroup label="How urgent is this?">
+        <div style={{ display: 'flex', gap: 10 }}>
+          {PRIORITIES.map(p => (
+            <PriorityCard
+              key={p.id}
+              priority={p}
+              active={priority === p.id}
+              onClick={() => setPriority(p.id)}
+            />
+          ))}
+        </div>
+      </FormGroup>
+
+      <FormGroup label="Describe the issue">
+        <textarea
+          value={desc} onChange={e => setDesc(e.target.value)}
+          placeholder="Please provide as much detail as possible to help us resolve it quickly..."
+          maxLength={600}
+          style={{ ...inputStyle, minHeight: 120, resize: 'vertical', lineHeight: 1.5 }}
+        />
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'right', marginTop: 4 }}>
+          {desc.length} / 600
+        </div>
+      </FormGroup>
+
+      <FormGroup label="Attach Screenshot (Optional)">
+        <label style={{
+          display: 'block', border: '2px dashed var(--slate)', borderRadius: 12,
+          padding: 24, textAlign: 'center', cursor: 'pointer', transition: 'all 0.18s',
+        }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = RED; e.currentTarget.style.background = '#fff7f7'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--slate)'; e.currentTarget.style.background = 'transparent'; }}
+        >
+          <input
+            type="file"
+            style={{ display: 'none' }}
+            onChange={e => {
+              const f = e.target.files?.[0];
+              setAttachmentFile(f || null);
+              setFileName(f?.name || '');
+            }}
+          />
+          <span className="material-symbols-outlined" style={{ fontSize: 28, color: 'var(--text-muted)' }}>cloud_upload</span>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+            Drag and drop or click to upload
+          </div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+            PNG, JPG, PDF up to 10MB
+          </div>
+          {fileName && <div style={{ marginTop: 10, fontSize: 12, color: RED, fontWeight: 600 }}>ðŸ“Ž {fileName}</div>}
+        </label>
+      </FormGroup>
+
+      <button onClick={onNext} style={primaryButtonStyle}>
+        Next: Select Device <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
+      </button>
+    </>
+  );
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ STEP 2 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function Step2({ devices, selected, setSelected, notes, setNotes, onBack, onNext }) {
+  return (
+    <>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, color: 'var(--text-primary)' }}>
+          Which device is affected?
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          Showing placeholder devices for the selected category â€” real assets will be wired in next phase.
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+        {devices.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: 20 }}>
+            No devices match this category. Pick "Other / Not Listed" to continue.
+          </div>
+        ) : (
+          devices.map(d => (
+            <DeviceCard key={d.id} device={d} active={selected?.id === d.id} onClick={() => setSelected(d)} />
+          ))
+        )}
+      </div>
+
+      {selected && <AutofillPanel device={selected} />}
+
+      <FormGroup label="Anything else about the device? (Optional)">
+        <textarea
+          value={notes} onChange={e => setNotes(e.target.value)}
+          placeholder="E.g., It was dropped, exposed to water, making weird noises..."
+          style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
+        />
+      </FormGroup>
+
+      <div style={{ display: 'flex', gap: 12 }}>
+        <button onClick={onBack} style={{ ...outlineButtonStyle, flex: 1 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_back</span> Back
+        </button>
+        <button onClick={onNext} style={{ ...primaryButtonStyle, flex: 2, marginTop: 0 }}>
+          Next: Remote Access <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
+        </button>
+      </div>
+    </>
+  );
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ STEP 3 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function Step3({ remote, setRemote, timeSlot, setTimeSlot, onBack, onNext }) {
+  return (
+    <>
+      <SectionHeader icon="cast" title="Remote Access Preference" subtitle="Allow the admin to connect remotely and fix your issue faster." />
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 28 }}>
+        {REMOTES.map(r => (
+          <RemoteCard key={r.id} remote={r} active={remote === r.id} onClick={() => setRemote(r.id)} />
+        ))}
+      </div>
+
+      <SectionHeader icon="schedule" title="Preferred Time Slot" subtitle="When would you like the admin to reach you?" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 28 }}>
+        {TIME_SLOTS.map(s => (
+          <TimeSlotCard key={s} slot={s} active={timeSlot === s} onClick={() => setTimeSlot(s)} />
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 12 }}>
+        <button onClick={onBack} style={{ ...outlineButtonStyle, flex: 1 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_back</span> Back
+        </button>
+        <button onClick={onNext} style={{ ...primaryButtonStyle, flex: 2, marginTop: 0 }}>
+          Review Ticket <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
+        </button>
+      </div>
+    </>
+  );
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ STEP 4 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function Step4({ subject, category, priority, desc, device, remote, timeSlot, goStep, onSubmit }) {
+  return (
+    <>
+      <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 20, color: 'var(--text-primary)' }}>
+        Review your ticket before submitting
+      </div>
+
+      <ReviewSection title="Issue Details" onEdit={() => goStep(1)}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: 'var(--text-primary)' }}>{subject}</div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          <span style={{
+            background: 'var(--off-white)', color: 'var(--text-primary)',
+            border: '1px solid var(--slate)', padding: '3px 10px', borderRadius: 20,
+            fontSize: 11, fontWeight: 700,
+          }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 13, verticalAlign: 'middle' }}>folder</span> {category}
+          </span>
+          <span style={{
+            background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca',
+            padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+          }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 12, verticalAlign: 'middle' }}>warning</span> {priority} Priority
+          </span>
+        </div>
+        <div style={{ fontSize: 12, lineHeight: 1.7, color: 'var(--text-muted)' }}>{desc}</div>
+      </ReviewSection>
+
+      <ReviewSection title="Device & Asset" onEdit={() => goStep(2)}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          background: 'var(--off-white)', borderRadius: 8, padding: 12,
+        }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10, background: '#f0fdf4',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: GREEN,
+          }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 22 }}>{device?.icon || 'help'}</span>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Device Name</div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{device?.name || 'Not selected'}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Asset ID / Serial</div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>
+              {device ? `${device.id} (${device.serial})` : 'â€”'}
+            </div>
+          </div>
+        </div>
+      </ReviewSection>
+
+      <ReviewSection title="Remote Access" onEdit={() => goStep(3)}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <ReviewBadge icon="cast"     label="ACCESS METHOD" value={remote} />
+          <ReviewBadge icon="schedule" label="TIME SLOT"     value={timeSlot} />
+        </div>
+      </ReviewSection>
+
+      <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', margin: '16px 0 12px' }}>
+        Submit this ticket?
+      </div>
+
+      <div style={{ display: 'flex', gap: 12 }}>
+        <button onClick={() => goStep(3)} style={{ ...outlineButtonStyle, flex: 1 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_back</span> Back
+        </button>
+        <button onClick={onSubmit} style={{ ...primaryButtonStyle, flex: 2, marginTop: 0 }}>
+          Submit Ticket
+        </button>
+      </div>
+    </>
+  );
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ SUCCESS CARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function SuccessCard({ ticketId, onAnother, onView }) {
+  return (
+    <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: 600, margin: '60px auto' }}>
+      <div style={{
+        background: 'var(--white)', borderRadius: 12, border: '1px solid var(--slate)',
+        padding: '48px 32px', textAlign: 'center',
+      }}>
+        <div style={{
+          width: 64, height: 64, background: '#f0fdf4', borderRadius: '50%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px',
+        }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 32, color: GREEN }}>task_alt</span>
+        </div>
+        <h2 style={{
+          fontSize: 22, fontWeight: 700, marginBottom: 8,
+          color: 'var(--text-primary)', fontFamily: 'DM Sans, sans-serif',
+        }}>
+          Ticket Submitted!
+        </h2>
+        <div style={{
+          display: 'inline-block', background: '#f0fdf4', color: GREEN,
+          border: '1px solid #bbf7d0', padding: '6px 18px', borderRadius: 6,
+          fontSize: 13, fontWeight: 600, margin: '8px 0',
+          fontFamily: 'DM Mono, monospace',
+        }}>
+          Ticket ID: {ticketId}
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '12px 0 24px' }}>
+          You will receive email updates as we work on your issue.
+        </p>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+          <button onClick={onView} style={outlineButtonStyle}>View My Tickets</button>
+          <button onClick={onAnother} style={{ ...primaryButtonStyle, marginTop: 0 }}>Raise Another Ticket</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
+function FormGroup({ label, children }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function CategoryCard({ icon, label, active, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        flex: '1 1 140px', minWidth: 140,
+        border: `1px solid ${active ? RED : 'var(--slate)'}`,
+        background: active ? '#fff7f7' : 'var(--white)',
+        color: active ? RED : 'var(--text-primary)',
+        borderRadius: 8, padding: 16,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+        cursor: 'pointer', fontSize: 13, fontWeight: 600, textAlign: 'center',
+        transition: 'all 0.15s',
+      }}
+    >
+      <span className="material-symbols-outlined" style={{ fontSize: 22, color: active ? RED : 'var(--text-muted)' }}>
+        {icon}
+      </span>
+      {label}
+    </div>
+  );
+}
+
+function PriorityCard({ priority, active, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        flex: 1, padding: '14px 16px', borderRadius: 8, cursor: 'pointer',
+        border: `1.5px solid ${active ? priority.color : 'var(--slate)'}`,
+        background: active ? priority.bg : 'var(--white)',
+        transition: 'all 0.15s',
+      }}
+    >
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, marginBottom: 4,
+        color: active ? priority.color : 'var(--text-primary)',
+      }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{priority.icon}</span>
+        {priority.id}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{priority.desc}</div>
+    </div>
+  );
+}
+
+function DeviceCard({ device, active, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        border: `1px solid ${active ? RED : 'var(--slate)'}`,
+        background: active ? '#fff7f7' : 'var(--white)',
+        borderRadius: 8, padding: 16,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+        cursor: 'pointer', flex: '1 1 calc(33.333% - 8px)', minWidth: 160, maxWidth: 230,
+        transition: 'all 0.15s', position: 'relative',
+      }}
+    >
+      {active && (
+        <span className="material-symbols-outlined" style={{
+          position: 'absolute', top: 8, right: 8, color: RED, fontSize: 18,
+        }}>
+          check_circle
+        </span>
+      )}
+      <span className="material-symbols-outlined" style={{ fontSize: 28, color: active ? RED : 'var(--text-muted)' }}>
+        {device.icon}
+      </span>
+      <div style={{ fontWeight: 600, fontSize: 12, textAlign: 'center', color: 'var(--text-primary)' }}>
+        {device.name}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
+        SN: {device.serial}
+      </div>
+      <div style={{
+        width: '100%', padding: 6, borderRadius: 6,
+        fontSize: 11, fontWeight: 600, textAlign: 'center', marginTop: 4,
+        border: `1px solid ${active ? RED : 'var(--slate)'}`,
+        background: active ? RED : 'var(--white)',
+        color: active ? '#fff' : 'var(--text-primary)',
+      }}>
+        {active ? 'SELECTED' : 'SELECT'}
+      </div>
+    </div>
+  );
+}
+
+function AutofillPanel({ device }) {
+  return (
+    <div style={{
+      background: '#fff7f7', border: '1px solid #fecaca', borderRadius: 8,
+      padding: 16, marginBottom: 20,
+    }}>
+      <div style={{
+        fontSize: 10, fontWeight: 700, color: RED,
+        textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12,
+        display: 'flex', alignItems: 'center', gap: 6,
+      }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>lock</span>
+        Auto-filled from your asset records (placeholder)
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+        <FieldDisplay label="ASSET ID"        value={device.id} />
+        <FieldDisplay label="SERIAL NUMBER"   value={device.serial} />
+        <FieldDisplay label="ASSIGNED DATE"   value={device.date} />
+        <FieldDisplay label="WARRANTY"        value={device.warranty} accent={GREEN} />
+        <FieldDisplay label="CONDITION"       value={device.condition} />
+      </div>
+    </div>
+  );
+}
+
+function FieldDisplay({ label, value, accent }) {
+  return (
+    <div>
+      <div style={{
+        fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+        textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4,
+      }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: accent || 'var(--text-primary)' }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ icon, title, subtitle }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6,
+      }}>
+        <span className="material-symbols-outlined" style={{ color: RED, fontSize: 18 }}>{icon}</span>
+        {title}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{subtitle}</div>
+    </div>
+  );
+}
+
+function RemoteCard({ remote, active, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        flex: 1, minWidth: 120,
+        border: `1.5px solid ${active ? RED : 'var(--slate)'}`,
+        background: active ? '#fff7f7' : 'var(--white)',
+        borderRadius: 12, padding: '16px 12px', textAlign: 'center',
+        cursor: 'pointer', transition: 'all 0.2s',
+      }}
+    >
+      <span className="material-symbols-outlined" style={{
+        fontSize: 28, color: active ? RED : 'var(--text-muted)', marginBottom: 8, display: 'block',
+      }}>
+        {remote.icon}
+      </span>
+      <div style={{
+        fontSize: 13, fontWeight: 700, marginBottom: 2,
+        color: active ? RED : 'var(--text-primary)',
+      }}>
+        {remote.id}
+      </div>
+      <div style={{ fontSize: 11, color: active ? RED : 'var(--text-muted)' }}>
+        {remote.sub}
+      </div>
+    </div>
+  );
+}
+
+function TimeSlotCard({ slot, active, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        padding: '12px 16px', borderRadius: 8, textAlign: 'center',
+        fontSize: 13, fontWeight: 600, cursor: 'pointer',
+        border: `1.5px solid ${active ? '#2563eb' : 'var(--slate)'}`,
+        background: active ? '#eff6ff' : 'var(--white)',
+        color: active ? '#2563eb' : 'var(--text-primary)',
+        transition: 'all 0.2s',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+      }}
+    >
+      {slot === 'Any Time' && (
+        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>schedule</span>
+      )}
+      {slot}
+    </div>
+  );
+}
+
+function ReviewSection({ title, onEdit, children }) {
+  return (
+    <div style={{
+      border: '1px solid var(--slate)', borderRadius: 8,
+      padding: 16, marginBottom: 12,
+    }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: 12,
+      }}>
+        <div style={{
+          fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
+          textTransform: 'uppercase', letterSpacing: '0.5px',
+        }}>
+          {title}
+        </div>
+        <span onClick={onEdit} style={{ fontSize: 12, color: RED, cursor: 'pointer', fontWeight: 600 }}>
+          Edit
+        </span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ReviewBadge({ icon, label, value }) {
+  return (
+    <div style={{
+      background: 'var(--off-white)', border: '1px solid var(--slate)',
+      borderRadius: 8, padding: '10px 16px',
+      display: 'flex', alignItems: 'center', gap: 8,
+    }}>
+      <span className="material-symbols-outlined" style={{ color: RED, fontSize: 18 }}>{icon}</span>
+      <div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.5px' }}>{label}</div>
+        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ STYLES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
+const inputStyle = {
+  width: '100%', border: '1px solid var(--slate)', borderRadius: 8,
+  padding: '12px 16px', fontSize: 14, outline: 'none',
+  fontFamily: 'DM Sans, sans-serif', background: 'var(--white)',
+  color: 'var(--text-primary)', transition: 'border 0.18s',
+};
+
+const primaryButtonStyle = {
+  width: '100%', padding: '14px', fontSize: 14, fontWeight: 700,
+  background: RED, color: '#fff', border: 'none', borderRadius: 12,
+  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+  boxShadow: '0 6px 16px rgba(204,58,58,0.25)',
+  fontFamily: 'DM Sans, sans-serif', marginTop: 12,
+};
+
+const outlineButtonStyle = {
+  padding: '14px 22px', fontSize: 14, fontWeight: 600,
+  background: 'var(--white)', color: 'var(--text-primary)',
+  border: '1px solid var(--slate)', borderRadius: 12,
+  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+  fontFamily: 'DM Sans, sans-serif',
+};

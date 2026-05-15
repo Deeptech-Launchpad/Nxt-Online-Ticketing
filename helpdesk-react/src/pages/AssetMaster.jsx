@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 
 const DIVISIONS = ['Guntur -AndhraPradesh', 'RS Puram Coimbatore', 'Saibaba Colony-Coimbatore', 'Thudiyalur-coimbatore', 'WFH'];
 const ASSET_TYPES = ['Laptop', 'Desktop', 'Printer', 'Networking', 'Monitor', 'UPS', 'Phone', 'Other'];
@@ -203,7 +203,8 @@ export default function AssetMaster() {
           createdAt:            a.created_at,
         })));
         setOrganizations(combinedOrgs);
-        setDemoUsers(usersData.map(u => u.name));
+        // Keep full user objects so allocate flow can look up email by name
+        setDemoUsers(usersData.map(u => ({ name: u.name, email: u.email || '' })));
       } catch (err) {
         setApiError('Cannot connect to backend. Is the server running on port 5000?');
       } finally {
@@ -529,7 +530,7 @@ export default function AssetMaster() {
               <span className="material-symbols-outlined" style={{ fontSize: 21, color: s.color }}>{s.icon}</span>
             </div>
             <div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--navy)', letterSpacing: '-1px', fontFamily: 'Manrope, sans-serif', lineHeight: 1 }}>{s.value}</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--navy)', letterSpacing: '-1px', fontFamily: 'DM Sans, sans-serif', lineHeight: 1 }}>{s.value}</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, marginTop: 3 }}>{s.label}</div>
             </div>
           </div>
@@ -559,7 +560,7 @@ export default function AssetMaster() {
 
         <select className="form-select-light" value={filterUser} onChange={e => setFilterUser(e.target.value)} style={{ flex: '1 1 120px', fontSize: 13 }}>
           <option value="all">All Users</option>
-          {demoUsers.map(user => <option key={user} value={user}>{user}</option>)}
+          {demoUsers.map(u => <option key={u.name} value={u.name}>{u.name}</option>)}
         </select>
 
         <select className="form-select-light" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ flex: '1 1 120px', fontSize: 13 }}>
@@ -621,8 +622,8 @@ export default function AssetMaster() {
                   <input type="checkbox" checked={selectedIds.includes(asset.id)} onChange={() => toggleSelect(asset.id)} />
                 </td>
                 <td><span style={{ fontSize: 12.5, fontFamily: "'DM Mono',monospace", color: 'var(--blue)', fontWeight: 700 }}>{asset.id}</span></td>
-                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : '—'}</td>
-                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.purchaseDate ? new Date(asset.purchaseDate).toLocaleDateString() : '—'}</td>
+                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : 'â€”'}</td>
+                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.purchaseDate ? new Date(asset.purchaseDate).toLocaleDateString() : 'â€”'}</td>
                 <td>
                   <div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: 14 }}>{asset.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>{asset.brand}</div>
@@ -654,13 +655,16 @@ export default function AssetMaster() {
                 <td style={{ textAlign: 'center', fontSize: 13, fontWeight: 600 }}>{asset.ownershipType === 'Rent' ? asset.quantity : 0}</td>
                 <td style={{ textAlign: 'center', fontSize: 13, fontWeight: 600 }}>{asset.ownershipType === 'Personal' ? asset.quantity : 0}</td>
                 <td><WarrantyBadge status={asset.warrantyStatus} /></td>
-                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.warrantyExpiry ? new Date(asset.warrantyExpiry).toLocaleDateString() : '—'}</td>
+                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.warrantyExpiry ? new Date(asset.warrantyExpiry).toLocaleDateString() : 'â€”'}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button className="action-btn-gray" title="Allocate/Return" onClick={(e) => { 
                     e.stopPropagation(); 
                     setAllocatingAsset(asset); 
                     setAllocationType('Allocate to User'); 
-                    setAllocationForm(prev => ({...prev, division: asset.division || '', userName: '', qty: 1})); 
+                    let returnToVal = 'Stock';
+                    if (asset.ownershipType === 'Rent') returnToVal = 'Vendor';
+                    if (asset.ownershipType === 'Personal') returnToVal = 'User';
+                    setAllocationForm(prev => ({...prev, division: asset.division || '', userName: '', qty: 1, returnTo: returnToVal})); 
                   }}>
                     <span className="material-symbols-outlined" style={{ fontSize: 17 }}>assignment_ind</span>
                   </button>
@@ -902,14 +906,18 @@ export default function AssetMaster() {
                   <FormField label="Select User">
                     <select className="form-select-light" value={allocationForm.userName} onChange={e => setAllocationForm({...allocationForm, userName: e.target.value})}>
                       <option value="">Select User</option>
-                      {demoUsers.map(u => <option key={u} value={u}>{u}</option>)}
+                      {demoUsers.map(u => <option key={u.name} value={u.name}>{u.name}</option>)}
                     </select>
                   </FormField>
                   <FormField label="Qty">
                     <select className="form-select-light" value={allocationForm.qty} onChange={e => setAllocationForm({...allocationForm, qty: Number(e.target.value)})}>
-                      {[...Array(allocatingAsset.quantity || 0)].map((_, i) => (
-                        <option key={i + 1} value={i + 1}>{i + 1}</option>
-                      ))}
+                      {(() => {
+                        const spare = allocatingAsset.quantity - allocatingAsset.qtyInUse - (allocatingAsset.qtyRepairing||0) - (allocatingAsset.qtyScrap||0);
+                        const maxQty = spare > 0 ? spare : 1;
+                        return [...Array(maxQty)].map((_, i) => (
+                          <option key={i + 1} value={i + 1}>{i + 1}</option>
+                        ));
+                      })()}
                     </select>
                   </FormField>
                 </div>
@@ -918,19 +926,14 @@ export default function AssetMaster() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <FormField label="Return From">
-                    <select className="form-select-light" value={allocationForm.returnFrom} onChange={e => setAllocationForm({...allocationForm, returnFrom: e.target.value})}>
-                      <option value="User">User</option>
-                      <option value="Stock">Stock</option>
+                    <input type="text" className="form-input-light" value="User" disabled />
+                  </FormField>
+                  <FormField label="Select User">
+                    <select className="form-select-light" value={allocationForm.userName} onChange={e => setAllocationForm({...allocationForm, userName: e.target.value})}>
+                      <option value="">Select User</option>
+                      {demoUsers.map(u => <option key={u.name} value={u.name}>{u.name}</option>)}
                     </select>
                   </FormField>
-                  {allocationForm.returnFrom === 'User' && (
-                    <FormField label="Select User">
-                      <select className="form-select-light" value={allocationForm.userName} onChange={e => setAllocationForm({...allocationForm, userName: e.target.value})}>
-                        <option value="">Select User</option>
-                        {demoUsers.map(u => <option key={u} value={u}>{u}</option>)}
-                      </select>
-                    </FormField>
-                  )}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <FormField label="Return To">
@@ -945,6 +948,11 @@ export default function AssetMaster() {
                       <input type="text" className="form-input-light" value={allocatingAsset.vendorName || 'N/A'} disabled />
                     </FormField>
                   )}
+                  {allocationForm.returnTo === 'User' && (
+                    <FormField label="Asset Owner">
+                      <input type="text" className="form-input-light" value={allocatingAsset.personalOwnerName || 'N/A'} disabled />
+                    </FormField>
+                  )}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <FormField label="Date">
@@ -952,7 +960,7 @@ export default function AssetMaster() {
                   </FormField>
                   <FormField label="Qty">
                     <select className="form-select-light" value={allocationForm.qty} onChange={e => setAllocationForm({...allocationForm, qty: Number(e.target.value)})}>
-                      {[...Array(allocatingAsset.quantity || 0)].map((_, i) => (
+                      {[...Array(allocatingAsset.qtyInUse || 1)].map((_, i) => (
                         <option key={i + 1} value={i + 1}>{i + 1}</option>
                       ))}
                     </select>
@@ -969,13 +977,20 @@ export default function AssetMaster() {
                     if (!allocationForm.userName) return alert('Please select a user');
                     const spare = allocatingAsset.quantity - allocatingAsset.qtyInUse - (allocatingAsset.qtyRepairing||0) - (allocatingAsset.qtyScrap||0);
                     if (allocationForm.qty > spare) return alert('Not enough spare stock available');
-                    
+
+                    // Look up email by name from the users list
+                    const picked = demoUsers.find(u => u.name === allocationForm.userName);
                     await fetch(`${API}/assets/${allocatingAsset.id}/allocate`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ user_name: allocationForm.userName, allocated_by: 'Admin' })
+                      body: JSON.stringify({
+                        user_name:  allocationForm.userName,
+                        user_email: picked?.email || '',
+                        allocated_by: 'Admin',
+                      })
                     });
                   } else {
+                    if (!allocationForm.userName) return alert('Please select which user is returning the asset');
                     let retCategory = 'To Infra';
                     if (allocationForm.returnTo === 'Vendor') retCategory = 'To Vendor';
                     else if (allocationForm.returnTo === 'User' || allocatingAsset.ownershipType === 'Personal') retCategory = 'To User';
@@ -983,7 +998,11 @@ export default function AssetMaster() {
                     await fetch(`${API}/assets/${allocatingAsset.id}/return`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ return_category: retCategory, returned_by: 'Admin' })
+                      body: JSON.stringify({
+                        return_category: retCategory,
+                        returned_by: 'Admin',
+                        user_name: allocationForm.userName,   // â† target this specific allocation
+                      })
                     });
                   }
                   await refreshAssets();
@@ -1033,7 +1052,7 @@ export default function AssetMaster() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--navy)' }}>Asset Allocation Details</div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{viewingHistory.name} · {viewingHistory.id}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{viewingHistory.name} Â· {viewingHistory.id}</div>
               </div>
               <button onClick={() => setViewingHistory(null)} className="action-btn-gray"><span className="material-symbols-outlined">close</span></button>
             </div>
@@ -1072,7 +1091,7 @@ export default function AssetMaster() {
                             )}
                           </td>
                           <td style={{ padding: '12px 8px', fontSize: 13, color: 'var(--text-muted)' }}>
-                            {h.returned_at ? new Date(h.returned_at).toLocaleDateString() : '—'}
+                            {h.returned_at ? new Date(h.returned_at).toLocaleDateString() : 'â€”'}
                           </td>
                         </tr>
                       ))

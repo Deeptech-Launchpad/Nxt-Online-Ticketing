@@ -1,5 +1,7 @@
-import { useState, useMemo } from 'react';
+﻿import { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { downloadCSV, todayStamp } from '../utils/csv';
+import { showToast } from '../components/Toast';
 
 const DIVISIONS = ['Guntur -AndhraPradesh', 'RS Puram Coimbatore', 'Saibaba Colony-Coimbatore', 'Thudiyalur-coimbatore', 'WFH'];
 const CATEGORIES = ['Hardware', 'Software', 'Network', 'Access / Login', 'Email', 'Printer', 'Other'];
@@ -66,6 +68,35 @@ export default function AdminReports() {
 
   const openRate = Math.round(openCount / Math.max(totalTickets, 1) * 100);
   const resRate = Math.round(resolvedCount / Math.max(totalTickets, 1) * 100);
+
+  const exportCSV = () => {
+    const sections = [];
+
+    // Section 1: Summary KPIs
+    sections.push({ Section: 'SUMMARY KPIS', Metric: '', Value: '', Detail: '' });
+    sections.push({ Section: '', Metric: 'Time Range',     Value: timeFilter,                 Detail: '' });
+    sections.push({ Section: '', Metric: 'Total Tickets',  Value: totalTickets,              Detail: 'All time within filter' });
+    sections.push({ Section: '', Metric: 'Open Rate',      Value: openRate + '%',            Detail: `${openCount} open now` });
+    sections.push({ Section: '', Metric: 'In Progress',    Value: inProgressCount,           Detail: 'Being worked on' });
+    sections.push({ Section: '', Metric: 'Resolution Rate', Value: resRate + '%',            Detail: `${resolvedCount} resolved` });
+
+    // Section 2: Tickets by Division
+    sections.push({ Section: '', Metric: '', Value: '', Detail: '' });
+    sections.push({ Section: 'TICKETS BY DIVISION', Metric: '', Value: '', Detail: '' });
+    divisionStats.forEach(d => {
+      sections.push({ Section: '', Metric: d.name, Value: d.count, Detail: '' });
+    });
+
+    // Section 3: Tickets by Category
+    sections.push({ Section: '', Metric: '', Value: '', Detail: '' });
+    sections.push({ Section: 'TICKETS BY CATEGORY', Metric: '', Value: '', Detail: '' });
+    catStats.forEach(c => {
+      sections.push({ Section: '', Metric: c.name, Value: c.count, Detail: '' });
+    });
+
+    downloadCSV(`reports-${timeFilter.replace(/\s+/g, '-').toLowerCase()}-${todayStamp()}.csv`, sections);
+    showToast(`Report exported (${timeFilter})`, 'success');
+  };
 
   const SUMMARY_KPIS = [
     {
@@ -137,7 +168,7 @@ export default function AdminReports() {
                   fontWeight: 600,
                   cursor: 'pointer',
                   transition: 'all 0.2s',
-                  fontFamily: 'Inter, sans-serif',
+                  fontFamily: 'DM Sans, sans-serif',
                   whiteSpace: 'nowrap',
                 }}
               >
@@ -145,8 +176,8 @@ export default function AdminReports() {
               </button>
             ))}
           </div>
-          <button className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', fontSize: 14 }}>
-            <span className="material-symbols-outlined" style={{ fontSize: 17 }}>picture_as_pdf</span>
+          <button onClick={exportCSV} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', fontSize: 14 }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 17 }}>file_download</span>
             Export
           </button>
         </div>
@@ -188,7 +219,7 @@ export default function AdminReports() {
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--navy)', letterSpacing: '-1.5px', fontFamily: 'Manrope, sans-serif', lineHeight: 1 }}>
+              <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--navy)', letterSpacing: '-1.5px', fontFamily: 'DM Sans, sans-serif', lineHeight: 1 }}>
                 {kpi.value}
               </div>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 4 }}>{kpi.label}</div>
@@ -361,17 +392,17 @@ export default function AdminReports() {
             alignItems: 'center',
           }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--navy)', fontFamily: 'Manrope, sans-serif' }}>{totalTickets}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--navy)', fontFamily: 'DM Sans, sans-serif' }}>{totalTickets}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>Total</div>
             </div>
             <div style={{ width: 1, height: 32, background: 'var(--slate)' }} />
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#95BF47', fontFamily: 'Manrope, sans-serif' }}>{resRate}%</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#95BF47', fontFamily: 'DM Sans, sans-serif' }}>{resRate}%</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>Resolved</div>
             </div>
             <div style={{ width: 1, height: 32, background: 'var(--slate)' }} />
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#f59e0b', fontFamily: 'Manrope, sans-serif' }}>{openRate}%</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#f59e0b', fontFamily: 'DM Sans, sans-serif' }}>{openRate}%</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>Open</div>
             </div>
           </div>

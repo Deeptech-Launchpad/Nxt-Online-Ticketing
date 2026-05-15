@@ -294,7 +294,7 @@ export default function LoginPage() {
       if (!user) {
         // Create a session user on the fly
         user = {
-          id:       role === 'admin' ? 'ADM-001' : 'EMP-GUEST',
+          id:       role === 'admin' ? 'ADM-001' : emailAddr,
           name:     name || emailAddr.split('@')[0],
           email:    emailAddr,
           role,

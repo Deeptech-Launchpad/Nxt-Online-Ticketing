@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
@@ -48,7 +48,7 @@ export function Navbar() {
         <span style={{ 
           fontWeight: 800, 
           fontSize: 13, 
-          fontFamily: 'Manrope, sans-serif', 
+          fontFamily: 'DM Sans, sans-serif', 
           letterSpacing: '-0.3px', 
           lineHeight: 1,
           color: logoHover ? 'var(--blue)' : 'var(--navy)',
@@ -111,7 +111,7 @@ export function Navbar() {
                   <button onClick={handleLogout} style={{
                     width: '100%', padding: '10px 16px', fontSize: 14, fontWeight: 600,
                     color: 'var(--danger)', background: 'transparent', border: 'none',
-                    cursor: 'pointer', textAlign: 'left', fontFamily: 'Inter, sans-serif'
+                    cursor: 'pointer', textAlign: 'left', fontFamily: 'DM Sans, sans-serif'
                   }}>
                     Sign out
                   </button>

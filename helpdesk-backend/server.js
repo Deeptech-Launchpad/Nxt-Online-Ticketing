@@ -1,17 +1,29 @@
 const express = require('express');
 const cors    = require('cors');
+const path    = require('path');
+const fs      = require('fs');
 const pool    = require('./db');
 require('dotenv').config();
 
 const app = express();
 
+// ── Ensure uploads/ folder exists ────────────────────────────
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  console.log('📁 Created uploads/ folder');
+}
+
 // ── Middleware ──────────────────────────────────────────────
 app.use(cors({
   origin: 'http://localhost:8090',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   credentials: true
 }));
 app.use(express.json());
+
+// Serve uploaded files at /uploads/<filename>
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // ── Routes ──────────────────────────────────────────────────
 app.use('/api/assets',        require('./routes/assets'));
@@ -19,6 +31,7 @@ app.use('/api/organizations', require('./routes/organizations'));
 app.use('/api/users',         require('./routes/users'));
 app.use('/api/tickets',       require('./routes/tickets'));
 app.use('/api/auth',          require('./routes/auth'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // ── Health check ────────────────────────────────────────────
 app.get('/', (req, res) => {
@@ -217,6 +230,148 @@ async function initDatabase() {
         ('TKT-0031', 'Assigned', '2026-03-25 10:15:00'),
         ('TKT-0031', 'Resolved', '2026-03-25 10:40:00')
       `);
+    }
+
+    // Apply schema patches for longer employee IDs (emails)
+    await pool.query(`
+      ALTER TABLE users ALTER COLUMN id TYPE VARCHAR(150);
+      ALTER TABLE tickets ALTER COLUMN employee_id TYPE VARCHAR(150);
+      ALTER TABLE tickets DROP CONSTRAINT IF EXISTS tickets_employee_id_fkey;
+    `);
+
+    // ── Phase-2 schema additions ──────────────────────────────
+    // Asset extra fields (My Assets page)
+    await pool.query(`
+      ALTER TABLE assets ADD COLUMN IF NOT EXISTS condition        VARCHAR(20)  DEFAULT 'Good';
+      ALTER TABLE assets ADD COLUMN IF NOT EXISTS health_percent   INT          DEFAULT 100;
+      ALTER TABLE assets ADD COLUMN IF NOT EXISTS is_primary       BOOLEAN      DEFAULT FALSE;
+      ALTER TABLE assets ADD COLUMN IF NOT EXISTS specs            JSONB;
+      ALTER TABLE assets ADD COLUMN IF NOT EXISTS purchase_from    VARCHAR(150);
+      ALTER TABLE assets ADD COLUMN IF NOT EXISTS purchase_invoice VARCHAR(100);
+    `);
+
+    // Ticket extra fields (Raise Ticket Step 2 + Step 3)
+    await pool.query(`
+      ALTER TABLE tickets ADD COLUMN IF NOT EXISTS preferred_time VARCHAR(40);
+      ALTER TABLE tickets ADD COLUMN IF NOT EXISTS device_notes   TEXT;
+    `);
+
+    // Employee profile extras (Admin → Employees page)
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS designation  VARCHAR(150);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS phone        VARCHAR(50);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS organization VARCHAR(150);
+    `);
+
+    // Notifications table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id          SERIAL PRIMARY KEY,
+        user_email  VARCHAR(150) NOT NULL,
+        type        VARCHAR(20)  NOT NULL,
+        severity    VARCHAR(20)  DEFAULT 'info',
+        title       VARCHAR(255) NOT NULL,
+        description TEXT,
+        related_id  VARCHAR(50),
+        is_read     BOOLEAN      DEFAULT FALSE,
+        created_at  TIMESTAMP    DEFAULT NOW()
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_email, is_read);`);
+
+    // Ticket attachments table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ticket_attachments (
+        id          SERIAL PRIMARY KEY,
+        ticket_id   VARCHAR(20) REFERENCES tickets(id) ON DELETE CASCADE,
+        file_name   VARCHAR(255) NOT NULL,
+        file_path   VARCHAR(500) NOT NULL,
+        file_size   INT,
+        mime_type   VARCHAR(100),
+        uploaded_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    // ── Backfill: ensure every ticket-author has a users row ──
+    // Historical tickets raised before auto-onboarding existed leave their
+    // requester invisible on the Employees page. This one-time scan creates
+    // a minimal row for any employee_id present on tickets but missing from
+    // users. Idempotent — re-running does nothing once everyone has a row.
+    const adminList = (process.env.ADMIN_EMAILS || '')
+      .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const orphans = await pool.query(`
+      SELECT DISTINCT t.employee_id, t.employee_name
+      FROM tickets t
+      WHERE t.employee_id IS NOT NULL
+        AND t.employee_id NOT IN (SELECT id FROM users)
+    `);
+    for (const row of orphans.rows) {
+      const id   = String(row.employee_id).trim();
+      const name = (row.employee_name || id.split('@')[0] || 'User').trim();
+      const avatar = name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+      // If employee_id looks like an email, use it as email too; otherwise leave NULL.
+      const isEmail = id.includes('@');
+      const email   = isEmail ? id.toLowerCase() : null;
+      const role    = email && adminList.includes(email) ? 'admin' : 'employee';
+      try {
+        await pool.query(`
+          INSERT INTO users (id, name, email, role, avatar)
+          VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT (id) DO NOTHING
+        `, [id, name, email, role, avatar]);
+      } catch (err) {
+        console.error(`[backfill] Skipped ${id}:`, err.message);
+      }
+    }
+    if (orphans.rows.length > 0) {
+      console.log(`✅ Backfilled ${orphans.rows.length} ticket-author user row(s)`);
+    }
+
+    // ── Backfill: reconcile asset.qty_in_use from active allocations ──
+    // Earlier versions of /return marked all allocations returned but only
+    // decremented qty_in_use by 1, so bulk assets drifted out of sync. This
+    // one-shot reconciliation rebuilds qty_in_use from the truth (allocations
+    // table). Idempotent — safe to run on every startup.
+    const assetSync = await pool.query(`
+      WITH active_counts AS (
+        SELECT a.id AS asset_id,
+               COALESCE(c.cnt, 0) AS active_count
+        FROM assets a
+        LEFT JOIN (
+          SELECT asset_id, COUNT(*)::int AS cnt
+          FROM asset_allocations
+          WHERE returned_at IS NULL
+          GROUP BY asset_id
+        ) c ON c.asset_id = a.id
+        WHERE a.qty_in_use IS DISTINCT FROM COALESCE(c.cnt, 0)
+      )
+      UPDATE assets a
+         SET qty_in_use = ac.active_count,
+             status     = CASE WHEN ac.active_count = 0 THEN 'Spare' ELSE 'In Use' END,
+             updated_at = NOW()
+        FROM active_counts ac
+       WHERE a.id = ac.asset_id
+       RETURNING a.id
+    `);
+    if (assetSync.rowCount > 0) {
+      console.log(`✅ Reconciled qty_in_use on ${assetSync.rowCount} asset(s)`);
+    }
+
+    // ── Backfill: fill in missing user_email on asset_allocations ──
+    // Older allocations were saved with empty user_email because the
+    // frontend dropdown only carried the user's name. Now we look each
+    // one up by name and write the email back.
+    const allocEmailFix = await pool.query(`
+      UPDATE asset_allocations al
+         SET user_email = u.email
+        FROM users u
+       WHERE (al.user_email IS NULL OR al.user_email = '')
+         AND u.name = al.user_name
+         AND u.email IS NOT NULL
+      RETURNING al.id
+    `);
+    if (allocEmailFix.rowCount > 0) {
+      console.log(`✅ Backfilled email on ${allocEmailFix.rowCount} allocation row(s)`);
     }
 
     console.log('✅ All tables created and seed data loaded');

@@ -1,6 +1,7 @@
 const express    = require('express');
 const router     = express.Router();
 const nodemailer = require('nodemailer');
+const pool       = require('../db');
 require('dotenv').config();
 
 // In-memory OTP store: { email: { code, expiresAt } }
@@ -12,6 +13,56 @@ function isAdmin(email) {
     .split(',')
     .map(e => e.trim().toLowerCase());
   return adminList.includes(email.trim().toLowerCase());
+}
+
+// ── Helper: derive a friendly display name from an email ────
+//   "sanjana.v@altius.com" → "Sanjana V"
+//   "purchase@yantra24x7.com" → "Purchase"
+function nameFromEmail(email) {
+  const local = String(email).split('@')[0] || 'User';
+  return local
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ') || 'User';
+}
+
+// ── Helper: derive 2-letter avatar initials ─────────────────
+function initialsFrom(name) {
+  return String(name || 'U')
+    .trim()
+    .split(/\s+/)
+    .map(w => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+/**
+ * Ensure a row exists in `users` for this email — auto-onboarding.
+ * Called after every successful authentication so the Admin → Employees
+ * page can list everyone who has ever logged in. Existing rows are
+ * left untouched so the admin's profile edits aren't overwritten.
+ *
+ * Uses email as both id and email (matches LoginPage.jsx convention
+ * where currentUser.id === email for non-admin OTP/OAuth users).
+ */
+async function ensureUserRow(email) {
+  if (!email) return;
+  const cleanEmail = email.trim().toLowerCase();
+  const role = isAdmin(cleanEmail) ? 'admin' : 'employee';
+  const name = nameFromEmail(cleanEmail);
+  const avatar = initialsFrom(name);
+
+  try {
+    await pool.query(`
+      INSERT INTO users (id, name, email, role, avatar)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (id) DO NOTHING
+    `, [cleanEmail, name, cleanEmail, role, avatar]);
+  } catch (err) {
+    console.error('[auth] ensureUserRow failed:', err.message);
+  }
 }
 
 // ── Helper: create mail transporter ─────────────────────────
@@ -76,7 +127,7 @@ router.post('/send-otp', async (req, res) => {
 });
 
 // ── POST /api/auth/verify-otp ────────────────────────────────
-router.post('/verify-otp', (req, res) => {
+router.post('/verify-otp', async (req, res) => {
   const { email, code } = req.body;
   if (!email || !code) return res.status(400).json({ error: 'Email and code are required' });
 
@@ -88,18 +139,20 @@ router.post('/verify-otp', (req, res) => {
   }
   if (record.code !== code.toString()) return res.status(400).json({ error: 'Invalid code. Please try again.' });
 
-  // Valid — clear OTP and respond with role
+  // Valid — clear OTP, ensure a users row exists, then respond
   delete otpStore[email.toLowerCase()];
   const role = isAdmin(email) ? 'admin' : 'employee';
+  await ensureUserRow(email);
   res.json({ success: true, email, role });
 });
 
 // ── POST /api/auth/check-role ────────────────────────────────
 // Used after Google OAuth to determine which dashboard to open
-router.post('/check-role', (req, res) => {
+router.post('/check-role', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
   const role = isAdmin(email) ? 'admin' : 'employee';
+  await ensureUserRow(email);
   res.json({ role, email });
 });
 

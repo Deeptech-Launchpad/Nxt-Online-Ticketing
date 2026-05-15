@@ -1,12 +1,14 @@
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
+import { downloadCSV, todayStamp } from '../utils/csv';
+import { showToast } from '../components/Toast';
 
 export default function AdminHistory() {
   const { tickets } = useApp();
   const navigate = useNavigate();
 
   // Aggregate all history events across all tickets
-  const allEvents = tickets.flatMap(ticket => 
+  const allEvents = tickets.flatMap(ticket =>
     (ticket.history || []).map(event => ({
       ...event,
       ticketId: ticket.id,
@@ -18,6 +20,17 @@ export default function AdminHistory() {
   // For simplicity with the mock data formatting, we reverse to show newest first roughly
   const sortedEvents = allEvents.reverse();
 
+  const exportCSV = () => {
+    const rows = sortedEvents.map(ev => ({
+      'Ticket ID':      ev.ticketId,
+      'Ticket Subject': ev.ticketSubject || '',
+      'Event':          ev.label || '',
+      'Time':           ev.time || '',
+    }));
+    downloadCSV(`history-log-${todayStamp()}.csv`, rows);
+    showToast(`Exported ${rows.length} event${rows.length === 1 ? '' : 's'}`, 'success');
+  };
+
   return (
     <div className="page-fade">
       <div className="page-header" style={{ marginBottom: 32 }}>
@@ -25,7 +38,7 @@ export default function AdminHistory() {
           <div className="page-title">Global History Log</div>
           <div className="page-sub">Audit trail of all ticket activities</div>
         </div>
-        <button className="btn btn-outline" style={{ color: 'var(--text-secondary)', borderColor: 'var(--slate)' }}>
+        <button onClick={exportCSV} className="btn btn-outline" style={{ color: 'var(--text-secondary)', borderColor: 'var(--slate)' }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18, color: 'var(--text-muted)' }}>download</span> Export CSV
         </button>
       </div>

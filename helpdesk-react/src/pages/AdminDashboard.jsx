@@ -1,301 +1,535 @@
-import { useState, useMemo } from 'react';
+﻿import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { StatusBadge, PriorityBadge } from '../components/Badge';
+import { useTheme } from '../context/ThemeContext';
+import { showToast } from '../components/Toast';
+
+const NAVY  = '#02172E';
+const RED   = '#CC3A3A';
+const AMBER = '#F59E0B';
+const GREEN = '#16a34a';
+const BLUE  = '#0EA5E9';
+
+/* â”€â”€ Priority color map â”€â”€ */
+const PRI_BAR = { 'Very High': RED, High: RED, Medium: AMBER, Low: GREEN };
+const PRI_PILL = {
+  'Very High': { bg: '#fef2f2', color: '#dc2626', border: '#fecaca', label: 'HIGH' },
+  High:        { bg: '#fef2f2', color: '#dc2626', border: '#fecaca', label: 'HIGH' },
+  Medium:      { bg: '#fffbeb', color: '#d97706', border: '#fde68a', label: 'MEDIUM' },
+  Low:         { bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0', label: 'LOW' },
+};
+
+const CAT_ICON = {
+  Network: 'wifi', Software: 'code', Hardware: 'computer', Email: 'mail',
+  Printer: 'print', 'Access / Login': 'lock', Other: 'more_horiz',
+};
+
+/* Pretty relative time */
+function relTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso.replace(',', ''));
+  if (isNaN(d)) return iso;
+  const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (diff < 60)        return `${diff}s ago`;
+  if (diff < 3600)      return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400)     return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d ago`;
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
 
 export default function AdminDashboard() {
-  const { tickets, setStatus } = useApp();
+  const { currentUser, tickets, assignTicket, setStatus } = useApp();
+  const { toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const [feedFilter, setFeedFilter] = useState('all');
 
-  const [search, setSearch] = useState('');
-  const [fTab, setFTab] = useState('all'); // 'all', 'action_required', 'in_progress', 'resolved'
-  const [fPriority, setFPriority] = useState('all');
-  const [fCategory, setFCategory] = useState('all');
-  const [fDivision, setFDivision] = useState('all');
-  const [showFilters, setShowFilters] = useState(false);
+  /* â”€â”€ Stats â”€â”€ */
+  const totalCount    = tickets.length;
+  const inProgCount   = tickets.filter(t => t.status === 'in-progress').length;
+  const resolvedCount = tickets.filter(t => ['resolved', 'closed'].includes(t.status)).length;
+  const highPriCount  = tickets.filter(t => ['High', 'Very High'].includes(t.priority) && !['resolved', 'closed'].includes(t.status)).length;
+  const openCount     = tickets.filter(t => ['open', 'reopened'].includes(t.status)).length;
 
-  // Stats Logic (Global for Health Strip)
-  const actionReq = tickets.filter(t => ['open', 'reopened'].includes(t.status)).length;
-  const inprog = tickets.filter(t => t.status === 'in-progress').length;
-  const closed = tickets.filter(t => ['resolved', 'closed'].includes(t.status)).length;
-  const urgent = tickets.filter(t => ['High', 'Very High'].includes(t.priority) && t.status !== 'closed').length;
-  const total = tickets.length;
+  /* â”€â”€ Critical alert: oldest Very-High unresolved ticket â”€â”€ */
+  const criticalTicket = useMemo(() => {
+    return tickets
+      .filter(t => t.priority === 'Very High' && ['open', 'reopened'].includes(t.status))
+      .sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1))[0];
+  }, [tickets]);
 
-  const STATS = [
-    { label: 'Awaiting Action', value: actionReq, sub: 'Open & Reopened', primary: true, icon: 'inbox', bg: 'var(--blue)' },
-    { label: 'High Priority', value: urgent, sub: 'Needs immediate attention', valueColor: '#CC3A3A', icon: 'priority_high', color: '#CC3A3A', bg: 'rgba(204,58,58,0.1)' },
-    { label: 'In Progress', value: inprog, sub: 'Currently being worked on', valueColor: '#2563eb', icon: 'autorenew', color: '#2563eb', bg: 'rgba(37,99,235,0.1)' },
-    { label: 'Resolved', value: closed, sub: 'Total resolved tickets', valueColor: '#95BF47', icon: 'task_alt', color: '#95BF47', bg: 'rgba(149,191,71,0.12)' },
-  ];
+  /* â”€â”€ Recent ticket feed â”€â”€ */
+  const feedTickets = useMemo(() => {
+    const sorted = [...tickets].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    if (feedFilter === 'all') return sorted.slice(0, 5);
+    if (feedFilter === 'Open')        return sorted.filter(t => ['open', 'reopened'].includes(t.status)).slice(0, 5);
+    if (feedFilter === 'In Progress') return sorted.filter(t => t.status === 'in-progress').slice(0, 5);
+    if (feedFilter === 'Resolved')    return sorted.filter(t => ['resolved', 'closed'].includes(t.status)).slice(0, 5);
+    return sorted.slice(0, 5);
+  }, [tickets, feedFilter]);
 
-  // Filtering Logic
-  const baseFiltered = useMemo(() => {
-    return tickets.filter(t => {
-      if (search && !t.subject.toLowerCase().includes(search.toLowerCase()) && !t.employeeName.toLowerCase().includes(search.toLowerCase()) && !t.id.toLowerCase().includes(search.toLowerCase())) return false;
-      
-      if (fPriority === 'Urgent') {
-        if (!['High', 'Very High'].includes(t.priority)) return false;
-      } else if (fPriority !== 'all' && t.priority !== fPriority) {
-        return false;
-      }
+  /* â”€â”€ Health radar derivation â”€â”€ */
+  const overallHealth = totalCount > 0 ? Math.round((resolvedCount / totalCount) * 100) : 100;
+  const hwTotal       = tickets.filter(t => t.category === 'Hardware').length;
+  const hwResolved    = tickets.filter(t => t.category === 'Hardware' && ['resolved', 'closed'].includes(t.status)).length;
+  const hwStability   = hwTotal > 0 ? Math.round((hwResolved / hwTotal) * 100) : 100;
 
-      if (fCategory !== 'all' && t.category !== fCategory) return false;
-      if (fDivision !== 'all' && t.division !== fDivision) return false;
-      return true;
-    });
-  }, [tickets, search, fPriority, fCategory, fDivision]);
-
-  const filtered = useMemo(() => {
-    return baseFiltered.filter(t => {
-      if (fTab === 'action_required' && !['open', 'reopened'].includes(t.status)) return false;
-      if (fTab === 'in_progress' && t.status !== 'in-progress') return false;
-      if (fTab === 'resolved' && !['resolved', 'closed'].includes(t.status)) return false;
-      return true;
-    });
-  }, [baseFiltered, fTab]);
-
-  // Dynamic counts for tabs
-  const dynTotal = baseFiltered.length;
-  const dynActionReq = baseFiltered.filter(t => ['open', 'reopened'].includes(t.status)).length;
-  const dynInprog = baseFiltered.filter(t => t.status === 'in-progress').length;
-  const dynClosed = baseFiltered.filter(t => ['resolved', 'closed'].includes(t.status)).length;
-
-  const categories = [...new Set(tickets.map(t => t.category))];
-  const divisions  = [...new Set(tickets.map(t => t.division))];
-
-  const accentClass = (t) => {
-    if (t.status === 'in-progress') return 'left-accent-in-progress';
-    if (t.priority === 'Very High') return 'left-accent-urgent';
-    if (t.priority === 'High')      return 'left-accent-high';
-    return '';
+  const claimTicket = async (t) => {
+    if (!currentUser) return;
+    await assignTicket(t.id, currentUser.name);
+    await setStatus(t.id, 'in-progress');
+    showToast(`Claimed ${t.id}`, 'success');
   };
 
-  const hasAdvancedFilters = fPriority !== 'all' || fCategory !== 'all' || fDivision !== 'all';
+  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <div className="page-fade">
-      {/* ── Admin Welcome Banner ── */}
-      <div style={{
-        position: 'relative', borderRadius: 20, overflow: 'hidden', marginBottom: 24,
-        background: 'linear-gradient(120deg, #02172E 0%, #021a38 35%, #02172E 65%, #CC3A3A 100%)',
-        boxShadow: '0 8px 32px rgba(31,36,72,0.2)', minHeight: 132,
-      }}>
-        <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0.12, pointerEvents: 'none' }} viewBox="0 0 900 152" preserveAspectRatio="xMidYMid slice">
-          <circle cx="830" cy="-30" r="170" fill="#fff" />
-          <circle cx="700" cy="180" r="130" fill="#CC3A3A" />
-          <circle cx="80"  cy="170" r="110" fill="#fff" />
-        </svg>
+    <div style={{ animation: 'fadeIn 0.3s ease' }}>
+      {/* â”€â”€ QUICK SHORTCUT BAR â”€â”€ */}
+      <div style={{ display: 'flex', gap: 14, marginBottom: 24, flexWrap: 'wrap' }}>
+        <ShortcutBtn icon="add_circle" iconColor={GREEN} label="New Asset"       onClick={() => navigate('/admin/assets')} />
+        <ShortcutBtn icon="person_add" iconColor={BLUE}  label="Assign Device"   onClick={() => navigate('/admin/assign-device')} />
+        <ShortcutBtn icon="people"     iconColor={AMBER} label="All Personnel"   onClick={() => navigate('/admin/employees')} />
+        <ShortcutBtn icon="dark_mode"  iconColor="#64748B" label="Toggle Theme"  onClick={toggleTheme} />
+      </div>
+
+      {/* â”€â”€ CRITICAL ALERT BANNER â”€â”€ */}
+      {criticalTicket && (
         <div style={{
-          position: 'relative', zIndex: 2, padding: '24px 32px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20
+          background: 'rgba(239, 68, 68, 0.08)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          borderLeft: `4px solid ${RED}`,
+          padding: '16px 24px', borderRadius: 12, marginBottom: 24,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{
-              width: 54, height: 54, borderRadius: '50%', background: 'linear-gradient(135deg, #02172E 0%, #CC3A3A 100%)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 18px rgba(0,0,0,0.28)', border: '2px solid rgba(255,255,255,0.2)'
+              width: 40, height: 40, borderRadius: 10,
+              background: 'rgba(239,68,68,0.18)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 24, color: '#fff' }}>admin_panel_settings</span>
+              <span className="material-symbols-outlined" style={{ color: RED, animation: 'pulse 2s infinite' }}>warning</span>
             </div>
             <div>
-              <h2 style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px', fontFamily: 'Manrope, sans-serif', margin: 0, lineHeight: 1.2 }}>
-                Admin Workspace
-              </h2>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: 500, marginTop: 4 }}>
-                Manage and track all support tickets efficiently
+              <div style={{ fontWeight: 800, fontSize: 14, color: RED, display: 'flex', alignItems: 'center', gap: 8 }}>
+                CRITICAL: VERY HIGH PRIORITY TICKET
+                <span style={{ background: RED, color: '#fff', fontSize: 9, padding: '2px 6px', borderRadius: 4 }}>HIGH RISK</span>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                {criticalTicket.employeeName} â€” <strong>{criticalTicket.subject}</strong> Â· created {relTime(criticalTicket.createdAt)}
               </div>
             </div>
           </div>
           <button
+            onClick={() => navigate(`/admin/tickets/${criticalTicket.id}`)}
+            style={{
+              padding: '10px 20px', fontSize: 12, fontWeight: 700,
+              background: RED, color: '#fff', border: 'none', borderRadius: 8,
+              cursor: 'pointer',
+            }}
+          >
+            Investigate Now
+          </button>
+        </div>
+      )}
+
+      {/* â”€â”€ HERO â”€â”€ */}
+      <div style={{
+        background: `linear-gradient(135deg, ${NAVY} 0%, #0a2540 100%)`,
+        padding: 48, borderRadius: 28, marginBottom: 36,
+        position: 'relative', overflow: 'hidden',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        boxShadow: '0 20px 50px rgba(2, 23, 46, 0.2)',
+      }}>
+        <div style={{ position: 'relative', zIndex: 5, flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+            <span style={{
+              background: 'rgba(255,255,255,0.1)', color: '#fff',
+              padding: '4px 14px', borderRadius: 20,
+              fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px',
+              border: '1px solid rgba(255,255,255,0.1)',
+            }}>
+              Command Center
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: 600 }}>
+              <span style={{
+                width: 8, height: 8, background: '#10b981', borderRadius: '50%',
+                display: 'inline-block', marginRight: 8,
+                boxShadow: '0 0 12px #10b981',
+                animation: 'pulse 2s infinite',
+              }} />
+              SYSTEM LIVE
+            </div>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 500, marginLeft: 'auto' }}>
+              {today}
+            </span>
+          </div>
+          <h2 style={{
+            fontSize: 38, fontWeight: 800, color: '#fff',
+            letterSpacing: '-1.2px', marginBottom: 12, lineHeight: 1.1,
+            fontFamily: 'DM Sans, sans-serif',
+          }}>
+            Workspace Overview
+          </h2>
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', maxWidth: 480, lineHeight: 1.6, margin: 0 }}>
+            Welcome back, <span style={{ color: '#fff', fontWeight: 700 }}>{currentUser?.name || 'Administrator'}</span>.
+            {criticalTicket
+              ? ' You have critical system alerts that require your immediate attention.'
+              : ' All systems are running smoothly today.'}
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 14, flexShrink: 0, position: 'relative', zIndex: 5 }}>
+          <GlassStat value={String(highPriCount).padStart(2, '0')} label="Critical Alerts" />
+          <GlassStat value={String(openCount).padStart(2, '0')}    label="Open Tickets" />
+        </div>
+
+        {/* Decorative icon */}
+        <div style={{
+          position: 'absolute', right: -40, bottom: -40,
+          opacity: 0.04, transform: 'rotate(-15deg)', pointerEvents: 'none',
+        }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 300, color: '#fff' }}>security</span>
+        </div>
+      </div>
+
+      {/* â”€â”€ STATS GRID (4 cards with health bars) â”€â”€ */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+        <StatCard icon="assignment"     iconColor={RED}   value={totalCount}    label="Total Tickets"  trend="Overall volume"   trendIcon="trending_up" pct={100} />
+        <StatCard icon="pending_actions" iconColor={BLUE}  value={inProgCount}   label="In Progress"    trend="Active resolution" trendIcon="bolt"        pct={totalCount > 0 ? Math.round((inProgCount / totalCount) * 100) : 0} />
+        <StatCard icon="task_alt"        iconColor={RED}   value={resolvedCount} label="Resolved"       trend="Total resolved"    trendIcon="check_circle" pct={totalCount > 0 ? Math.round((resolvedCount / totalCount) * 100) : 0} />
+        <StatCard icon="priority_high"   iconColor={AMBER} value={highPriCount}  label="High Priority"  trend="Urgent attention"  trendIcon="speed"        pct={totalCount > 0 ? Math.round((highPriCount / totalCount) * 100) : 0} />
+      </div>
+
+      {/* â”€â”€ BODY GRID: feed left, health radar right â”€â”€ */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 32 }}>
+        {/* RECENT TICKETS FEED */}
+        <div style={{ background: 'var(--white)', borderRadius: 16, border: '1px solid var(--slate)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+          <div style={{
+            padding: 24, borderBottom: '1px solid var(--slate)',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12,
+          }}>
+            <div>
+              <h3 style={{ fontWeight: 800, fontSize: 18, color: NAVY, letterSpacing: '-0.5px', fontFamily: 'DM Sans, sans-serif' }}>
+                Recent Tickets
+              </h3>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                Real-time monitoring of workplace incidents
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {['all', 'Open', 'In Progress', 'Resolved'].map(f => (
+                <FilterTab key={f} label={f === 'all' ? 'All' : f} active={feedFilter === f} onClick={() => setFeedFilter(f)} />
+              ))}
+            </div>
+          </div>
+
+          <div style={{ padding: 20 }}>
+            {feedTickets.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                No tickets match this filter.
+              </div>
+            ) : (
+              feedTickets.map(t => (
+                <FeedRow
+                  key={t.id}
+                  ticket={t}
+                  onView={() => navigate(`/admin/tickets/${t.id}`)}
+                  onClaim={() => claimTicket(t)}
+                />
+              ))
+            )}
+          </div>
+
+          <div style={{ padding: 18, borderTop: '1px solid var(--slate)', textAlign: 'center' }}>
+            <a
+              onClick={() => navigate('/admin/tickets')}
+              style={{
+                fontSize: 13, color: RED, fontWeight: 700, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              Go to Ticket Center <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
+            </a>
+          </div>
+        </div>
+
+        {/* HEALTH RADAR */}
+        <div style={{ background: 'var(--white)', borderRadius: 16, border: '1px solid var(--slate)', boxShadow: 'var(--shadow-sm)', padding: 28 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <h3 style={{ fontWeight: 800, fontSize: 18, color: NAVY, letterSpacing: '-0.5px', fontFamily: 'DM Sans, sans-serif' }}>
+              Health Radar
+            </h3>
+            <div style={{
+              width: 40, height: 40, borderRadius: 12,
+              background: 'rgba(204,58,58,0.1)', color: RED,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <span className="material-symbols-outlined">analytics</span>
+            </div>
+          </div>
+
+          <RadialGauge value={overallHealth} />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 20 }}>
+            <RadarRow color={RED}   label="Hardware Stability" value={`${hwStability}%`} />
+          </div>
+
+          <button
             onClick={() => navigate('/admin/reports')}
             style={{
-              background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1.5px solid rgba(255,255,255,0.22)',
-              borderRadius: 12, padding: '10px 18px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 7, transition: 'all 0.15s',
+              width: '100%', marginTop: 24, padding: 14, borderRadius: 12,
+              background: NAVY, color: '#fff', border: 'none', cursor: 'pointer',
+              fontSize: 13, fontWeight: 700, fontFamily: 'DM Sans, sans-serif',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.22)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.transform = 'none'; }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bar_chart</span>
-            View Reports
+            View System Reports
           </button>
         </div>
       </div>
 
-      {/* ── Health Strip ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
-        {STATS.map((s, i) => (
-          <div 
-            key={i} 
-            className={s.primary ? 'stat-card primary-card' : 'stat-card'} 
-            style={{ padding: '18px', cursor: 'pointer' }}
-            onClick={() => {
-              if (s.label === 'Awaiting Action') { setFTab('action_required'); setFPriority('all'); }
-              if (s.label === 'High Priority') { setFTab('all'); setFPriority('Urgent'); }
-              if (s.label === 'In Progress') { setFTab('in_progress'); setFPriority('all'); }
-              if (s.label === 'Resolved') { setFTab('resolved'); setFPriority('all'); }
-              // Optionally smooth scroll down a bit if on a smaller screen so they see the table change
-              window.scrollTo({ top: document.body.scrollHeight / 3, behavior: 'smooth' });
+      {/* keyframes */}
+      <style>{`
+        @keyframes pulse {
+          0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+          70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+          100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ COMPONENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
+function ShortcutBtn({ icon, iconColor, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        background: 'var(--white)', border: '1px solid var(--slate)',
+        borderRadius: 12, padding: '10px 20px',
+        fontWeight: 700, fontSize: 13, color: NAVY, cursor: 'pointer',
+        boxShadow: 'var(--shadow-sm)', transition: 'all 0.18s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = RED; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.borderColor = 'var(--slate)'; }}
+    >
+      <span className="material-symbols-outlined" style={{ color: iconColor }}>{icon}</span>
+      {label}
+    </button>
+  );
+}
+
+function GlassStat({ value, label }) {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.05)',
+      backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+      border: '1px solid rgba(255,255,255,0.1)',
+      padding: '20px 24px', borderRadius: 20, minWidth: 160,
+    }}>
+      <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', lineHeight: 1, marginBottom: 4, fontFamily: 'DM Sans, sans-serif' }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ icon, iconColor, value, label, trend, trendIcon, pct }) {
+  return (
+    <div style={{
+      background: 'var(--white)', borderRadius: 16,
+      border: '1px solid var(--slate)', padding: 24,
+      boxShadow: 'var(--shadow-sm)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div style={{
+          width: 48, height: 48, borderRadius: 14,
+          background: `${iconColor}1a`, color: iconColor,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <span className="material-symbols-outlined">{icon}</span>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 26, fontWeight: 800, color: NAVY, fontFamily: 'DM Sans, sans-serif' }}>{value}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>{label}</div>
+        </div>
+      </div>
+      <div style={{ height: 6, background: '#f3f4f6', borderRadius: 4, overflow: 'hidden', marginBottom: 8 }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: iconColor, borderRadius: 4, transition: 'width 0.5s' }} />
+      </div>
+      <div style={{ fontSize: 11, color: iconColor, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{trendIcon}</span>
+        {trend}
+      </div>
+    </div>
+  );
+}
+
+function FilterTab({ label, active, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+        cursor: 'pointer', border: '1px solid var(--slate)',
+        background: active ? RED : 'var(--white)',
+        color: active ? '#fff' : 'var(--text-muted)',
+        boxShadow: active ? '0 4px 12px rgba(204,58,58,0.25)' : 'none',
+        transition: 'all 0.2s',
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+function FeedRow({ ticket, onView, onClaim }) {
+  const pri = ticket.priority || 'Low';
+  const barColor = PRI_BAR[pri] || GREEN;
+  const priStyle = PRI_PILL[pri] || PRI_PILL.Low;
+  const catIcon  = CAT_ICON[ticket.category] || 'category';
+  const status   = ticket.status;
+
+  const initials = (ticket.employeeName || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+
+  const isResolved = ['resolved', 'closed'].includes(status);
+  const isInProg   = status === 'in-progress';
+
+  return (
+    <div
+      onClick={e => { if (!e.target.closest('button')) onView(); }}
+      style={{
+        padding: '16px 20px', borderRadius: 12,
+        background: 'var(--off-white)', border: '1px solid var(--slate)',
+        borderLeft: `4px solid ${barColor}`,
+        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16,
+        marginBottom: 12, opacity: isResolved ? 0.8 : 1,
+        transition: 'all 0.18s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)'; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+    >
+      {/* Avatar */}
+      <div style={{
+        width: 44, height: 44, borderRadius: 10,
+        background: `linear-gradient(135deg, ${RED}, ${NAVY})`,
+        color: '#fff', fontSize: 13, fontWeight: 700,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'DM Sans, sans-serif',
+        flexShrink: 0,
+      }}>
+        {initials}
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: NAVY }}>{ticket.employeeName || 'Unknown'}</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{relTime(ticket.createdAt)}</span>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 14, color: barColor }}>{catIcon}</span>
+          {ticket.subject}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            padding: '1px 8px', borderRadius: 4,
+            fontSize: 9, fontWeight: 700,
+            background: priStyle.bg, color: priStyle.color, border: `1px solid ${priStyle.border}`,
+          }}>
+            {priStyle.label}
+          </span>
+          <span style={{ fontSize: 11, color: '#94A3B8' }}>{ticket.category || 'General'}</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={e => { e.stopPropagation(); onView(); }}
+          style={{
+            width: 36, height: 36, padding: 0, borderRadius: 8,
+            background: 'transparent', border: '1px solid var(--slate)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 18, color: 'var(--text-muted)' }}>visibility</span>
+        </button>
+        {isResolved ? (
+          <button
+            onClick={e => { e.stopPropagation(); onView(); }}
+            style={{
+              height: 36, padding: '0 16px', borderRadius: 8,
+              background: RED, color: '#fff', border: 'none',
+              fontSize: 12, fontWeight: 700, cursor: 'pointer',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 12, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 20, color: s.primary ? '#fff' : s.color }}>{s.icon}</span>
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 800, color: s.primary ? '#fff' : s.valueColor, lineHeight: 1 }}>{s.value}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: s.primary ? '#fff' : 'var(--text-primary)' }}>{s.label}</div>
-              <div style={{ fontSize: 12.5, color: s.primary ? 'rgba(255,255,255,0.7)' : 'var(--text-muted)', marginTop: 2 }}>{s.sub}</div>
-            </div>
+            Reopen
+          </button>
+        ) : isInProg ? (
+          <div style={{
+            height: 36, display: 'flex', alignItems: 'center', gap: 6,
+            padding: '0 10px', background: '#fef2f2', border: '1px solid #fecaca',
+            borderRadius: 8, fontSize: 11, fontWeight: 700, color: RED,
+          }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>sync</span> Processing
           </div>
-        ))}
-      </div>
-
-      {/* ── Ticket Grid ── */}
-      <div style={{ background: 'var(--white)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--slate)', padding: 24 }}>
-        
-        {/* Quick Tabs & Search Bar Row */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 20, marginBottom: 16 }}>
-          <div className="quick-tabs" style={{ margin: 0, padding: 0, border: 'none' }}>
-            <button className={`quick-tab-btn ${fTab === 'all' ? 'active' : ''}`} onClick={() => setFTab('all')}>
-              All Tickets <span className="tab-count">{dynTotal}</span>
-            </button>
-            <button className={`quick-tab-btn ${fTab === 'action_required' ? 'active' : ''}`} onClick={() => setFTab('action_required')}>
-              Action Required <span className="tab-count">{dynActionReq}</span>
-            </button>
-            <button className={`quick-tab-btn ${fTab === 'in_progress' ? 'active' : ''}`} onClick={() => setFTab('in_progress')}>
-              In Progress <span className="tab-count">{dynInprog}</span>
-            </button>
-            <button className={`quick-tab-btn ${fTab === 'resolved' ? 'active' : ''}`} onClick={() => setFTab('resolved')}>
-              Resolved <span className="tab-count">{dynClosed}</span>
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <div className="search-bar" style={{ minWidth: 260 }}>
-              <span className="material-symbols-outlined" style={{ color: 'var(--text-muted)', fontSize: 18 }}>search</span>
-              <input placeholder="Search ID, Issue, or Employee..." value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-            <button 
-              className="btn btn-white" 
-              onClick={() => setShowFilters(!showFilters)}
-              style={{ padding: '9px 14px', background: hasAdvancedFilters ? 'var(--blue-pale)' : 'var(--white)', borderColor: hasAdvancedFilters ? 'var(--blue-light)' : 'var(--slate)', color: hasAdvancedFilters ? 'var(--blue)' : 'var(--text-primary)' }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>filter_list</span>
-              Filters {hasAdvancedFilters ? '(Active)' : ''}
-            </button>
-          </div>
-        </div>
-
-        {/* Advanced Filters Drawer */}
-        {showFilters && (
-          <div style={{ background: 'var(--off-white)', padding: 16, borderRadius: 12, border: '1px solid var(--slate)', marginBottom: 20, display: 'flex', gap: 16, flexWrap: 'wrap', animation: 'fadeIn 0.2s ease' }}>
-            <div style={{ flex: '1 1 200px' }}>
-              <label className="form-label-light">Priority</label>
-              <select className="form-select-light" value={fPriority} onChange={e => setFPriority(e.target.value)}>
-                <option value="all">All Priorities</option>
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-                <option value="Very High">Very High</option>
-                <option value="Urgent">High & Very High</option>
-              </select>
-            </div>
-            <div style={{ flex: '1 1 200px' }}>
-              <label className="form-label-light">Category</label>
-              <select className="form-select-light" value={fCategory} onChange={e => setFCategory(e.target.value)}>
-                <option value="all">All Categories</option>
-                {categories.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div style={{ flex: '1 1 200px' }}>
-              <label className="form-label-light">Division</label>
-              <select className="form-select-light" value={fDivision} onChange={e => setFDivision(e.target.value)}>
-                <option value="all">All Divisions</option>
-                {divisions.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
-            {hasAdvancedFilters && (
-              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <button className="btn btn-white" onClick={() => { setFPriority('all'); setFCategory('all'); setFDivision('all'); }} style={{ color: 'var(--danger)' }}>
-                  Clear Filters
-                </button>
-              </div>
-            )}
-          </div>
+        ) : (
+          <button
+            onClick={e => { e.stopPropagation(); onClaim(); }}
+            style={{
+              height: 36, padding: '0 16px', borderRadius: 8,
+              background: RED, color: '#fff', border: 'none',
+              fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            Claim
+          </button>
         )}
-
-        {/* ── 5-Column Consolidated Table ── */}
-        <div style={{ border: '1px solid var(--slate)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-          {filtered.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">
-                <span className="material-symbols-outlined" style={{ fontSize: 28, color: 'var(--text-muted)' }}>inbox</span>
-              </div>
-              <div className="empty-title">No tickets match</div>
-              <div className="empty-sub">Try adjusting your filters above.</div>
-            </div>
-          ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Ticket & Requester</th>
-                  <th>Context</th>
-                  <th>Timing</th>
-                  <th>Status & Priority</th>
-                  <th style={{ textAlign: 'right' }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(t => (
-                  <tr key={t.id} className={accentClass(t)} onClick={() => navigate(`/admin/tickets/${t.id}`)}>
-                    <td style={{ maxWidth: 320 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, fontFamily: "'DM Mono',monospace", color: 'var(--blue)', fontWeight: 700, background: 'var(--blue-pale)', padding: '2px 6px', borderRadius: 4 }}>
-                          #{t.id}
-                        </span>
-                        <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--navy)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.subject}</div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>person</span>
-                        <span style={{ fontWeight: 600 }}>{t.employeeName}</span>
-                        <span style={{ color: 'var(--slate)' }}>•</span>
-                        <span>{t.division}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{t.category}</div>
-                      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{t.remote === 'In Person' ? 'hail' : 'desktop_windows'}</span>
-                        {t.remote || 'Unknown'}
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{t.createdAt?.split(',')[0]}</div>
-                      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>schedule</span>
-                        {t.createdAt?.split(',')[1]?.trim() || '—'}
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
-                        <PriorityBadge priority={t.priority} />
-                        <StatusBadge status={t.status} />
-                      </div>
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <button className="btn-view-action" style={{ padding: '8px 16px' }}>
-                        View
-                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
       </div>
+    </div>
+  );
+}
+
+function RadialGauge({ value }) {
+  // Simple visual approximation using border trick â€” not full SVG arc
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28, position: 'relative' }}>
+      <div style={{
+        width: 140, height: 140, borderRadius: '50%',
+        border: '12px solid var(--slate)',
+        position: 'relative',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column',
+      }}>
+        <div style={{ fontSize: 28, fontWeight: 800, color: NAVY, fontFamily: 'DM Sans, sans-serif' }}>{value}%</div>
+        <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Overall Health</div>
+        {/* Mask circle for progress */}
+        <div style={{
+          position: 'absolute', inset: -12,
+          border: `12px solid ${RED}`,
+          borderRadius: '50%',
+          borderBottomColor: 'transparent',
+          borderRightColor: value < 50 ? 'transparent' : RED,
+          borderLeftColor:  value < 25 ? 'transparent' : RED,
+          transform: 'rotate(45deg)',
+        }} />
+      </div>
+    </div>
+  );
+}
+
+function RadarRow({ color, label, value }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
+        <span style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>{label}</span>
+      </div>
+      <span style={{ fontSize: 13, fontWeight: 700 }}>{value}</span>
     </div>
   );
 }

@@ -1,274 +1,376 @@
-import { useState } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
-const ICON_MAP = { Network: 'wifi_off', Software: 'terminal', Hardware: 'devices', Email: 'mail', Printer: 'print' };
+const NAVY  = '#02172E';
+const RED   = '#CC3A3A';
+const AMBER = '#F59E0B';
+const GREEN = '#16a34a';
+const BLUE  = '#0EA5E9';
 
-const ICON_BG_STYLE = {
-  Network:  { background: 'rgba(204,58,58,0.1)',   color: '#CC3A3A' },
-  Software: { background: 'rgba(37,99,235,0.1)',   color: '#2563eb' },
-  Hardware: { background: 'rgba(2,23,46,0.08)',    color: '#02172E' },
-  Email:    { background: 'rgba(149,191,71,0.12)', color: '#95BF47' },
-  Printer:  { background: 'rgba(2,23,46,0.08)',    color: '#02172E' },
+/* â”€â”€ PRIORITY COLOR MAP â”€â”€ */
+const PRIORITY_COLOR = {
+  'Very High': RED,
+  High:        RED,
+  Medium:      AMBER,
+  Low:         GREEN,
+};
+const PRIORITY_PILL = {
+  High:   { color: '#ef4444', bg: '#fef2f2', border: '#fee2e2' },
+  Medium: { color: '#f59e0b', bg: '#fffbeb', border: '#fef3c7' },
+  Low:    { color: '#10b981', bg: '#ecfdf5', border: '#d1fae5' },
+};
+const STATUS_PILL = {
+  open:          { color: '#2563eb', bg: '#eff6ff', border: '#dbeafe', label: 'OPEN' },
+  'in-progress': { color: '#d97706', bg: '#fffbeb', border: '#fef3c7', label: 'IN PROGRESS' },
+  resolved:      { color: '#16a34a', bg: '#f0fdf4', border: '#dcfce7', label: 'RESOLVED' },
+  closed:        { color: '#6b7280', bg: '#f9fafb', border: '#e5e7eb', label: 'CLOSED' },
+  reopened:      { color: '#6d28d9', bg: '#ede9fe', border: '#ddd6fe', label: 'REOPENED' },
+};
+const CATEGORY_ICON = {
+  Network:  'wifi',
+  Software: 'code',
+  Hardware: 'computer',
+  Email:    'mail',
+  Printer:  'print',
 };
 
-const PRIORITY_STYLE = {
-  'Very High': { background: '#fdecea', color: '#CC3A3A' },
-  High:        { background: '#fdecea', color: '#CC3A3A' },
-  Medium:      { background: 'rgba(37,99,235,0.1)', color: '#2563eb' },
-  Low:         { background: '#f1f5f9', color: '#475569' },
-};
+/* â”€â”€ PLACEHOLDER MY ASSETS (real data wired in next phase) â”€â”€ */
+const PLACEHOLDER_ASSETS = [
+  { id: 'AST-9921', name: 'MacBook Pro 16" (M2 Max)',  icon: 'laptop' },
+  { id: 'AST-8342', name: 'iPhone 14 Pro (Corporate)', icon: 'smartphone' },
+  { id: 'AST-1104', name: 'Dell UltraSharp 27" 4K',    icon: 'monitor' },
+];
 
-function TicketCard({ ticket, onClick }) {
-  const icon   = ICON_MAP[ticket.category] || 'confirmation_number';
-  const iconBg = ICON_BG_STYLE[ticket.category] || { background: 'rgba(2,23,46,0.08)', color: '#02172E' };
-  const pStyle = PRIORITY_STYLE[ticket.priority] || PRIORITY_STYLE.Low;
+/* â”€â”€ TIME-AGO HELPER â”€â”€ */
+function timeAgo(rawDate) {
+  if (!rawDate) return '';
+  // rawDate from AppContext is already formatted "DD MMM YYYY, HH:mm"
+  const parts = rawDate.split(',')[0]?.trim();
+  return parts || rawDate;
+}
 
-  let dotColor = '#95BF47', statusLabel = 'Resolved';
-  if (ticket.status === 'open')        { dotColor = '#CC3A3A'; statusLabel = 'Open'; }
-  else if (ticket.status === 'reopened') { dotColor = '#6d28d9'; statusLabel = 'Reopened'; }
-  else if (ticket.status === 'in-progress') { dotColor = '#2563eb'; statusLabel = 'In Progress'; }
+/* â”€â”€ PRIORITY NORMALIZER â”€â”€ */
+function normPriority(p) {
+  if (!p) return 'Low';
+  if (p === 'Very High') return 'High';
+  return p;
+}
 
-  const [hovered, setHovered] = useState(false);
+export default function EmployeeDashboard() {
+  const { currentUser, getMyTickets, fetchMyAssets } = useApp();
+  const navigate = useNavigate();
+  const mine = getMyTickets();
+  const [realAssetCount, setRealAssetCount] = useState(null);
+
+  // Fetch real asset count (falls back to placeholder count if empty)
+  useEffect(() => {
+    let cancelled = false;
+    fetchMyAssets().then(rows => {
+      if (cancelled) return;
+      setRealAssetCount((rows && rows.length > 0) ? rows.length : PLACEHOLDER_ASSETS.length);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const openCount     = mine.filter(t => ['open', 'reopened'].includes(t.status)).length;
+
+  // Pending Reply = tickets where the last message was from admin (employee owes a reply)
+  const pendingReply  = mine.filter(t => {
+    const msgs = t.messages || [];
+    return msgs.length > 0 && msgs[msgs.length - 1].from === 'admin';
+  }).length;
+
+  const myAssetsCount = realAssetCount ?? PLACEHOLDER_ASSETS.length;
+
+  // Greeting based on hour
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const firstName = currentUser?.name?.split(' ')[0] || 'there';
+
+  // Today's date pretty
+  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  // Recent tickets â€” top 3, newest first by id presence (already sorted from API)
+  const recentTickets = mine.slice(0, 3);
 
   return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, padding: '14px 16px',
-        borderRadius: 12, transition: 'background 0.15s, box-shadow 0.15s',
-        border: `1px solid ${hovered ? 'var(--slate)' : 'transparent'}`,
-        background: hovered ? 'var(--off-white)' : 'transparent',
-        boxShadow: hovered ? 'var(--shadow-sm)' : 'none',
-      }}
-    >
-      {/* Ticket ID */}
-      <span style={{
-        fontFamily: "'DM Mono', monospace", fontSize: 12, fontWeight: 700,
-        color: 'var(--blue)', background: 'var(--blue-pale)',
-        padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap', minWidth: 80, textAlign: 'center',
+    <div style={{ animation: 'fadeIn 0.3s ease' }}>
+
+      {/* â”€â”€ HERO â”€â”€ */}
+      <div style={{
+        background: `linear-gradient(135deg, ${NAVY} 0%, #0A2540 100%)`,
+        padding: '40px 44px', borderRadius: 24, marginBottom: 28,
+        position: 'relative', overflow: 'hidden',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 28,
+        boxShadow: '0 18px 36px rgba(2,23,46,0.18)',
       }}>
-        #{ticket.id}
-      </span>
+        {/* Left content */}
+        <div style={{ position: 'relative', zIndex: 5, flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+            <span style={{
+              background: 'rgba(255,255,255,0.1)', color: '#fff',
+              padding: '4px 14px', borderRadius: 20,
+              fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px',
+              border: '1px solid rgba(255,255,255,0.1)',
+            }}>
+              Employee Portal
+            </span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
+              {today}
+            </span>
+          </div>
 
-      {/* Category Icon */}
-      <div style={{ width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, ...iconBg }}>
-        <span className="material-symbols-outlined" style={{ fontSize: 20 }}>{icon}</span>
+          <h2 style={{
+            fontSize: 34, fontWeight: 800, color: '#fff',
+            letterSpacing: '-1px', marginBottom: 10, lineHeight: 1.15,
+            fontFamily: 'DM Sans, sans-serif',
+          }}>
+            {greet}, {firstName}
+          </h2>
+          <p style={{
+            fontSize: 14, color: 'rgba(255,255,255,0.7)',
+            maxWidth: 460, lineHeight: 1.6, margin: 0,
+          }}>
+            Track your IT support requests, view assigned assets, and raise new tickets â€” all in one place.
+          </p>
+
+          {/* Glass stat tiles */}
+          <div style={{ display: 'flex', gap: 14, marginTop: 26, flexWrap: 'wrap' }}>
+            <GlassStat value={String(openCount).padStart(2, '0')}     label="Open Tickets" />
+            <GlassStat value={String(pendingReply).padStart(2, '0')}  label="Pending Reply" />
+            <GlassStat value={String(myAssetsCount).padStart(2, '0')} label="My Assets" />
+          </div>
+        </div>
+
+        {/* Right CTA */}
+        <div style={{ position: 'relative', zIndex: 5, flexShrink: 0 }}>
+          <button
+            onClick={() => navigate('/raise-ticket')}
+            style={{
+              padding: '16px 28px', fontSize: 15, fontWeight: 700,
+              borderRadius: 16, background: RED, color: '#fff', border: '2px solid rgba(255,255,255,0.1)',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+              boxShadow: '0 12px 28px rgba(204,58,58,0.4)',
+              fontFamily: 'DM Sans, sans-serif',
+              transition: 'transform 0.18s, box-shadow 0.18s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 22 }}>add_circle</span>
+            Raise New Ticket
+          </button>
+        </div>
+
+        {/* Decorative icon */}
+        <div style={{
+          position: 'absolute', right: -32, bottom: -32,
+          opacity: 0.05, transform: 'rotate(-15deg)', pointerEvents: 'none',
+        }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 260, color: '#fff' }}>support_agent</span>
+        </div>
       </div>
 
-      {/* Subject + meta */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, color: '#0C0E10', fontSize: 14.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {ticket.subject}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-          <span style={{ background: 'var(--off-white)', color: 'var(--text-secondary)', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {ticket.category}
-          </span>
-          <span style={{ color: 'var(--slate)' }}>•</span>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ticket.createdAt}</span>
-        </div>
-      </div>
+      {/* â”€â”€ TWO-COL BODY â”€â”€ */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)',
+        gap: 24,
+      }}>
+        {/* Recent Tickets */}
+        <Section
+          title="Recent Tickets"
+          icon="receipt_long"
+          actionLabel="View all"
+          onAction={() => navigate('/history')}
+        >
+          {recentTickets.length === 0 ? (
+            <EmptyState message="No tickets yet â€” raise your first one." />
+          ) : (
+            recentTickets.map(t => (
+              <TicketRow key={t.id} ticket={t} onClick={() => navigate(`/tickets/${t.id}`)} />
+            ))
+          )}
+        </Section>
 
-      {/* Priority + Status + Arrow */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
-        <span style={{ ...pStyle, padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          {ticket.priority}
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700, color: dotColor }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor, display: 'inline-block' }} />
-          {statusLabel}
-        </span>
-        <span className="material-symbols-outlined" style={{ color: '#CC3A3A', fontSize: 20 }}>arrow_forward</span>
+        {/* My Assets â€” placeholder data */}
+        <Section
+          title="My Assets"
+          icon="devices"
+          actionLabel="View all"
+          onAction={() => {}}
+          subtitle="Showing placeholder data"
+        >
+          {PLACEHOLDER_ASSETS.map(a => (
+            <AssetRow key={a.id} asset={a} />
+          ))}
+        </Section>
       </div>
     </div>
   );
 }
 
-export default function EmployeeDashboard() {
-  const { currentUser, getMyTickets } = useApp();
-  const navigate = useNavigate();
-  const [filter, setFilter] = useState('all');
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-  const mine  = getMyTickets();
-  const total = mine.length;
-  const open  = mine.filter(t => ['open', 'reopened'].includes(t.status)).length;
-  const prog  = mine.filter(t => t.status === 'in-progress').length;
-  const res   = mine.filter(t => ['resolved', 'closed'].includes(t.status)).length;
+function GlassStat({ value, label }) {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.05)',
+      backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+      border: '1px solid rgba(255,255,255,0.1)',
+      padding: '14px 20px', borderRadius: 16, minWidth: 130,
+    }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', lineHeight: 1, marginBottom: 4, fontFamily: 'DM Sans, sans-serif' }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+        {label}
+      </div>
+    </div>
+  );
+}
 
-  let visible = mine;
-  if (filter === 'open')        visible = mine.filter(t => ['open', 'reopened'].includes(t.status));
-  if (filter === 'in-progress') visible = mine.filter(t => t.status === 'in-progress');
-  if (filter === 'closed')      visible = mine.filter(t => ['resolved', 'closed'].includes(t.status));
+function Section({ title, icon, actionLabel, onAction, subtitle, children }) {
+  return (
+    <div style={{
+      background: 'var(--white)', borderRadius: 16, padding: 24,
+      border: '1px solid var(--slate)',
+      boxShadow: 'var(--shadow-sm)',
+    }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18,
+      }}>
+        <div>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            fontSize: 16, fontWeight: 700, color: '#0C0E10', fontFamily: 'DM Sans, sans-serif',
+          }}>
+            <span className="material-symbols-outlined" style={{ color: RED, fontSize: 22 }}>{icon}</span>
+            {title}
+          </div>
+          {subtitle && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, marginLeft: 32 }}>
+              {subtitle}
+            </div>
+          )}
+        </div>
+        {actionLabel && (
+          <div
+            onClick={onAction}
+            style={{
+              fontSize: 13, fontWeight: 600, color: RED, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            {actionLabel}
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
+          </div>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
 
-  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' });
-
-  const STATS = [
-    { filterId: 'all',         label: 'Total Raised', value: total, sub: 'All time raised',   icon: 'layers',      color: '#02172E', bg: 'rgba(2,23,46,0.08)',    valueColor: '#02172E' },
-    { filterId: 'open',        label: 'Open',         value: open,  sub: 'Awaiting action',   icon: 'pending',     color: '#CC3A3A', bg: 'rgba(204,58,58,0.1)',   valueColor: '#CC3A3A' },
-    { filterId: 'in-progress', label: 'In Progress',  value: prog,  sub: 'Being worked on',   icon: 'sync',        color: '#2563eb', bg: 'rgba(37,99,235,0.1)',   valueColor: '#2563eb' },
-    { filterId: 'closed',      label: 'Resolved',     value: res,   sub: 'Successfully closed', icon: 'task_alt', color: '#95BF47', bg: 'rgba(149,191,71,0.12)', valueColor: '#95BF47' },
-  ];
+function TicketRow({ ticket, onClick }) {
+  const pri = normPriority(ticket.priority);
+  const barColor = PRIORITY_COLOR[pri] || GREEN;
+  const priStyle = PRIORITY_PILL[pri] || PRIORITY_PILL.Low;
+  const stStyle  = STATUS_PILL[ticket.status] || STATUS_PILL.open;
+  const catIcon  = CATEGORY_ICON[ticket.category] || 'category';
 
   return (
-    <div className="page-fade">
-
-      {/* ── Welcome Banner ── */}
-      <div style={{
-        position: 'relative', borderRadius: 20, overflow: 'hidden', marginBottom: 24,
-        background: 'linear-gradient(120deg, #02172E 0%, #021a38 42%, #02172E 68%, #CC3A3A 100%)',
-        boxShadow: '0 8px 32px rgba(31,36,72,0.2)', minHeight: 152,
-      }}>
-        {/* Decorative blobs */}
-        <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0.12, pointerEvents: 'none' }} viewBox="0 0 900 152" preserveAspectRatio="xMidYMid slice">
-          <circle cx="830" cy="-30" r="170" fill="#fff" />
-          <circle cx="700" cy="180" r="130" fill="#CC3A3A" />
-          <circle cx="80"  cy="170" r="110" fill="#fff" />
-          <circle cx="290" cy="-50" r="95"  fill="#CC3A3A" />
-          <circle cx="510" cy="76"  r="62"  fill="#fff" />
-        </svg>
-        {/* Dot grid */}
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.07, pointerEvents: 'none' }}>
-          <defs>
-            <pattern id="edots" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
-              <circle cx="3" cy="3" r="1.5" fill="#fff" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#edots)" />
-        </svg>
-
-        {/* Content */}
+    <div
+      onClick={onClick}
+      style={{
+        padding: '14px 0', borderBottom: '1px solid #f1f5f9',
+        display: 'flex', gap: 14, cursor: 'pointer',
+        transition: 'transform 0.18s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateX(4px)'; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
+    >
+      <div style={{ width: 3, borderRadius: 4, background: barColor, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+          #{ticket.id}
+        </div>
         <div style={{
-          position: 'relative', zIndex: 2, padding: '28px 36px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          gap: 24, flexWrap: 'wrap',
+          fontSize: 14, fontWeight: 600, color: '#0C0E10', marginBottom: 5,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
-          {/* Left — Avatar + Greeting */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-            <div style={{
-              width: 62, height: 62, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #CC3A3A 0%, #02172E 100%)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 22, fontWeight: 800, color: '#fff',
-              boxShadow: '0 4px 18px rgba(0,0,0,0.28)', flexShrink: 0,
-              border: '3px solid rgba(255,255,255,0.2)',
-              fontFamily: 'Manrope, sans-serif',
-            }}>
-              {(currentUser?.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.48)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 5 }}>
-                {today}
-              </div>
-              <h2 style={{ fontSize: 24, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px', fontFamily: 'Manrope, sans-serif', margin: 0, lineHeight: 1.15 }}>
-                Welcome back, {currentUser?.name?.split(' ')[0] || 'User'}
-              </h2>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', fontWeight: 500, marginTop: 7, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>location_on</span>
-                {currentUser?.division}{currentUser?.dept ? ' · ' + currentUser.dept : ''}
-              </div>
-            </div>
-          </div>
-
-          {/* Right — CTA */}
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <button
-              onClick={() => navigate('/raise-ticket')}
-              style={{
-                background: '#CC3A3A', color: '#fff', border: 'none', borderRadius: 12,
-                padding: '12px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 7,
-                boxShadow: '0 4px 14px rgba(204,58,58,0.4)',
-                fontFamily: 'Inter, sans-serif',
-                transition: 'background 0.15s, transform 0.15s',
-                whiteSpace: 'nowrap',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#a82e2e'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#CC3A3A'; e.currentTarget.style.transform = 'none'; }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add_circle</span>
-              Raise a Ticket
-            </button>
-          </div>
+          {ticket.subject}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{catIcon}</span>
+          {ticket.category || 'General'}
         </div>
       </div>
-
-      {/* ── Stat Cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
-        {STATS.map((s, i) => (
-          <div
-            key={i}
-            onClick={() => setFilter(s.filterId)}
-            style={{
-              background: 'var(--white)', borderRadius: 14,
-              border: filter === s.filterId ? `1.5px solid ${s.color}` : '1px solid var(--slate)', padding: '16px 18px',
-              display: 'flex', flexDirection: 'column', gap: 10,
-              transition: 'box-shadow 0.2s, transform 0.2s', cursor: 'pointer',
-              boxShadow: filter === s.filterId ? `0 4px 18px ${s.color}20` : 'none',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,0.09)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
-          >
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 19, color: s.color }}>{s.icon}</span>
-            </div>
-            <div>
-              <div style={{ fontSize: 30, fontWeight: 800, color: s.valueColor, letterSpacing: '-1px', fontFamily: 'Manrope, sans-serif', lineHeight: 1 }}>
-                {s.value}
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 5 }}>
-                {s.label}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                {s.sub}
-              </div>
-            </div>
-          </div>
-        ))}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+        <Pill {...priStyle}>{pri.toUpperCase()}</Pill>
+        <Pill {...stStyle}>{stStyle.label}</Pill>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{timeAgo(ticket.createdAt)}</span>
       </div>
+    </div>
+  );
+}
 
-      {/* ── Ticket List ── */}
-      <div style={{ background: 'var(--white)', borderRadius: 14, boxShadow: 'var(--shadow-sm)', border: '1px solid var(--slate)', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid var(--slate)', gap: 12 }}>
-          <h3 style={{ fontSize: 17, fontWeight: 700, fontFamily: 'Manrope, sans-serif', color: '#0C0E10', margin: 0 }}>My Tickets</h3>
-          <div style={{ display: 'flex', background: 'var(--off-white)', borderRadius: 10, padding: 4, gap: 4, border: '1px solid var(--slate)' }}>
-            {['all', 'open', 'in-progress', 'closed'].map(f => (
-              <button key={f} onClick={() => setFilter(f)} style={{
-                padding: '6px 16px', borderRadius: 7, fontSize: 13, fontWeight: 600,
-                border: 'none', cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'all 0.15s',
-                background: filter === f ? 'var(--white)' : 'transparent',
-                color: filter === f ? 'var(--blue-light)' : 'var(--text-muted)',
-                boxShadow: filter === f ? 'var(--shadow-sm)' : 'none',
-              }}>
-                {f === 'in-progress' ? 'In Progress' : f.charAt(0).toUpperCase() + f.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
+function Pill({ color, bg, border, children }) {
+  return (
+    <span style={{
+      padding: '3px 10px', borderRadius: 20,
+      fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
+      color, background: bg, border: `1px solid ${border}`,
+      whiteSpace: 'nowrap',
+    }}>
+      {children}
+    </span>
+  );
+}
 
-        <div style={{ padding: '8px 16px' }}>
-          {visible.length === 0
-            ? <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-muted)', fontWeight: 500 }}>No tickets found.</div>
-            : visible.map(t => (
-              <TicketCard key={t.id} ticket={t} onClick={() => navigate(`/tickets/${t.id}`)} />
-            ))
-          }
-        </div>
-
-        <div style={{ borderTop: '1px solid var(--slate)', padding: '14px 24px', textAlign: 'center' }}>
-          <button onClick={() => navigate('/history')} style={{
-            fontSize: 13.5, fontWeight: 700, color: 'var(--blue-light)',
-            background: 'none', border: 'none', cursor: 'pointer',
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            fontFamily: 'Inter, sans-serif',
-          }}>
-            View All Activity
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>expand_more</span>
-          </button>
-        </div>
+function AssetRow({ asset }) {
+  return (
+    <div style={{
+      padding: 14, border: '1px solid #f1f5f9', borderRadius: 12,
+      marginBottom: 10, display: 'flex', alignItems: 'center', gap: 14,
+      transition: 'all 0.18s',
+    }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = RED; e.currentTarget.style.background = '#fff7f7'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = '#f1f5f9'; e.currentTarget.style.background = 'transparent'; }}
+    >
+      <div style={{
+        width: 42, height: 42, background: '#f8fafc',
+        border: '1px solid #f1f5f9', borderRadius: 10,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', color: RED,
+      }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 22 }}>{asset.icon}</span>
       </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#0C0E10' }}>{asset.name}</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{asset.id}</div>
+      </div>
+      <span style={{
+        background: '#f0fdf4', color: '#16a34a',
+        padding: '4px 10px', borderRadius: 6,
+        fontSize: 10, fontWeight: 700, border: '1px solid #dcfce7',
+      }}>
+        ACTIVE
+      </span>
+    </div>
+  );
+}
+
+function EmptyState({ message }) {
+  return (
+    <div style={{
+      textAlign: 'center', padding: '40px 20px',
+      color: 'var(--text-muted)', fontSize: 14,
+    }}>
+      <span className="material-symbols-outlined" style={{ fontSize: 40, opacity: 0.4, display: 'block', marginBottom: 8 }}>
+        inbox
+      </span>
+      {message}
     </div>
   );
 }

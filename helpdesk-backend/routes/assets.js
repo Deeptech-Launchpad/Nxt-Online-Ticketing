@@ -1,6 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../db');
+const { createNotification } = require('./_notify');
 
 // ── Helper: generate next asset ID ─────────────────────────
 async function generateAssetId() {
@@ -20,6 +21,57 @@ router.get('/', async (req, res) => {
       LEFT JOIN organizations o ON a.organization_id = o.id
       ORDER BY a.created_at DESC
     `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET ALL active asset allocations (admin: Employees page) ─
+// Returns one row per active allocation with asset + user details.
+// Used to render asset chips & assigned-asset table per employee.
+// Must come BEFORE /:id route.
+router.get('/all-allocations', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        a.id              AS asset_id,
+        a.name            AS asset_name,
+        a.brand           AS asset_brand,
+        a.type            AS asset_type,
+        a.warranty_status,
+        a.warranty_expiry,
+        a.condition,
+        al.user_email,
+        al.user_name,
+        al.allocated_at,
+        al.allocated_by
+      FROM asset_allocations al
+      INNER JOIN assets a ON a.id = al.asset_id
+      WHERE al.returned_at IS NULL
+      ORDER BY al.allocated_at DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET assets currently allocated to the calling user ──────
+// Must come BEFORE /:id route or it'll be swallowed by the param route
+router.get('/me', async (req, res) => {
+  const email = req.query.email;
+  if (!email) return res.status(400).json({ error: 'email query param required' });
+  try {
+    const result = await pool.query(`
+      SELECT a.*, o.name AS organization_name,
+             al.allocated_at, al.allocated_by, al.user_email
+      FROM assets a
+      INNER JOIN asset_allocations al ON a.id = al.asset_id
+      LEFT JOIN organizations o ON a.organization_id = o.id
+      WHERE al.user_email = $1 AND al.returned_at IS NULL
+      ORDER BY al.allocated_at DESC
+    `, [email]);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -143,6 +195,22 @@ router.post('/:id/allocate', async (req, res) => {
       return res.status(400).json({ error: `No spare units available for ${asset.name}. Current spare: 0` });
     }
 
+    // Resolve user_email: trust the body first; otherwise look it up by name.
+    // Stops "No email provided" from happening when older frontend bundles
+    // are cached and forget to send user_email.
+    let resolvedEmail = (user_email || '').trim();
+    if (!resolvedEmail && user_name) {
+      try {
+        const lookup = await pool.query(
+          'SELECT email FROM users WHERE name = $1 AND email IS NOT NULL ORDER BY id LIMIT 1',
+          [user_name]
+        );
+        resolvedEmail = lookup.rows[0]?.email || '';
+      } catch (lookupErr) {
+        console.warn('[allocate] email lookup failed:', lookupErr.message);
+      }
+    }
+
     // Update asset
     await pool.query(`
       UPDATE assets SET qty_in_use = qty_in_use + 1, assigned_to = $1, status = 'In Use', updated_at = NOW()
@@ -154,8 +222,20 @@ router.post('/:id/allocate', async (req, res) => {
     await pool.query(`
       INSERT INTO asset_allocations (asset_id, user_name, user_email, allocated_by)
       VALUES ($1, $2, $3, $4)`,
-      [asset_id, user_name, user_email || '', allocated_by || 'Admin']
+      [asset_id, user_name, resolvedEmail, allocated_by || 'Admin']
     );
+
+    // Notify the user who received the asset (use resolved email)
+    if (resolvedEmail) {
+      createNotification({
+        user_email: resolvedEmail,
+        type: 'asset',
+        severity: 'info',
+        title: `Asset Assigned: ${asset.name}`,
+        description: `Admin has assigned ${asset.name} (${asset.id}) to you. Please acknowledge receipt in the portal.`,
+        related_id: asset_id,
+      });
+    }
 
     res.json({ message: `Asset allocated to ${user_name} successfully` });
   } catch (err) {
@@ -164,33 +244,93 @@ router.post('/:id/allocate', async (req, res) => {
 });
 
 // ── POST return asset ───────────────────────────────────────
+// Body: { return_category, returned_by, user_name?, allocation_id? }
+//   - For bulk assets, pass user_name (or allocation_id) so we close ONE
+//     specific allocation, not every active one.
+//   - qty_in_use is reconciled from the actual active-allocation count
+//     after the return, so it can never drift out of sync.
 router.post('/:id/return', async (req, res) => {
-  const { return_category, returned_by } = req.body;
+  const { return_category, returned_by, user_name, allocation_id } = req.body;
   const asset_id = req.params.id;
 
   try {
     const assetResult = await pool.query('SELECT * FROM assets WHERE id = $1', [asset_id]);
     if (assetResult.rows.length === 0) return res.status(404).json({ error: 'Asset not found' });
 
-    if (return_category === 'To Vendor' || return_category === 'To User') {
-      // Remove from inventory completely
-      await pool.query('DELETE FROM assets WHERE id = $1', [asset_id]);
+    // Step 1 — close exactly ONE allocation (most recent active match)
+    let allocClosed;
+    if (allocation_id) {
+      allocClosed = await pool.query(`
+        UPDATE asset_allocations
+           SET returned_at = NOW(), return_category = $1
+         WHERE id = $2 AND returned_at IS NULL
+         RETURNING *`,
+        [return_category, allocation_id]
+      );
+    } else if (user_name) {
+      allocClosed = await pool.query(`
+        UPDATE asset_allocations
+           SET returned_at = NOW(), return_category = $1
+         WHERE id = (
+           SELECT id FROM asset_allocations
+            WHERE asset_id = $2 AND user_name = $3 AND returned_at IS NULL
+            ORDER BY allocated_at DESC LIMIT 1
+         )
+         RETURNING *`,
+        [return_category, asset_id, user_name]
+      );
     } else {
-      // To Infra → move back to Spare
-      await pool.query(`
-        UPDATE assets SET qty_in_use = GREATEST(0, qty_in_use - 1), assigned_to = NULL, status = 'Spare', updated_at = NOW()
-        WHERE id = $1`, [asset_id]
+      // Backwards-compatible: close the most-recent active allocation for this asset
+      allocClosed = await pool.query(`
+        UPDATE asset_allocations
+           SET returned_at = NOW(), return_category = $1
+         WHERE id = (
+           SELECT id FROM asset_allocations
+            WHERE asset_id = $2 AND returned_at IS NULL
+            ORDER BY allocated_at DESC LIMIT 1
+         )
+         RETURNING *`,
+        [return_category, asset_id]
       );
     }
 
-    // Update allocation history - mark as returned
+    // Step 2 — handle full-removal categories
+    if (return_category === 'To Vendor' || return_category === 'To User') {
+      await pool.query('DELETE FROM assets WHERE id = $1', [asset_id]);
+      return res.json({ message: `Asset removed (${return_category}) successfully` });
+    }
+
+    // Step 3 — reconcile qty_in_use from the truth (allocations table)
+    const activeCountRes = await pool.query(
+      `SELECT COUNT(*)::int AS cnt FROM asset_allocations WHERE asset_id = $1 AND returned_at IS NULL`,
+      [asset_id]
+    );
+    const activeCount = activeCountRes.rows[0].cnt;
+
+    // Pick a sensible assigned_to: any remaining active user, or NULL
+    const remainingUserRes = await pool.query(
+      `SELECT user_name FROM asset_allocations
+        WHERE asset_id = $1 AND returned_at IS NULL
+        ORDER BY allocated_at DESC LIMIT 1`,
+      [asset_id]
+    );
+    const remainingUser = remainingUserRes.rows[0]?.user_name || null;
+
     await pool.query(`
-      UPDATE asset_allocations SET returned_at = NOW(), return_category = $1
-      WHERE asset_id = $2 AND returned_at IS NULL`,
-      [return_category, asset_id]
+      UPDATE assets
+         SET qty_in_use  = $1,
+             assigned_to = $2,
+             status      = CASE WHEN $1 = 0 THEN 'Spare' ELSE 'In Use' END,
+             updated_at  = NOW()
+       WHERE id = $3`,
+      [activeCount, remainingUser, asset_id]
     );
 
-    res.json({ message: `Asset returned (${return_category}) successfully` });
+    res.json({
+      message: `Asset returned (${return_category}) successfully`,
+      closed: allocClosed.rowCount,
+      qty_in_use: activeCount,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
