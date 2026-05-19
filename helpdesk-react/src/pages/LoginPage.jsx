@@ -240,6 +240,25 @@ export default function LoginPage() {
     if (e.key === 'Enter') handleVerify();
   };
 
+  // Friendly messages for NxtPeople 403 reason codes
+  const accessDeniedMessage = (reason) => {
+    switch (reason) {
+      case 'NOT_GRANTED':
+        return "Your account exists but HR hasn't given you access to this app. Please contact HR.";
+      case 'EMPLOYEE_INACTIVE':
+        return 'Your employment status does not allow access. Please contact HR.';
+      case 'NOT_FOUND':
+        return 'Email not recognised. Please contact HR.';
+      case 'INVALID_KEY':
+      case 'RATE_LIMITED':
+      case 'NETWORK_ERROR':
+      case 'CONFIG_MISSING':
+        return 'Login service temporarily unavailable. Please try again in a minute.';
+      default:
+        return 'Access denied. Please contact HR.';
+    }
+  };
+
   // ── Verify OTP ────────────────────────────────────────────
   const handleVerify = async () => {
     const code = otpDigits.join('');
@@ -252,7 +271,15 @@ export default function LoginPage() {
         body: JSON.stringify({ email, code }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Invalid code.'); return; }
+      if (!res.ok) {
+        // 403 from NxtPeople gate carries a reason code — map to friendly text
+        if (res.status === 403 && data.reason) {
+          setError(accessDeniedMessage(data.reason));
+        } else {
+          setError(data.error || 'Invalid code.');
+        }
+        return;
+      }
       doLogin(email, data.role);
     } catch {
       setError('Verification failed. Try again.');
@@ -275,6 +302,15 @@ export default function LoginPage() {
         body: JSON.stringify({ email: googleEmail }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        // 403 from NxtPeople gate — show friendly message
+        if (res.status === 403 && data.reason) {
+          setError(accessDeniedMessage(data.reason));
+        } else {
+          setError(data.error || 'Google login failed.');
+        }
+        return;
+      }
       doLogin(googleEmail, data.role, payload.name, payload.picture);
     } catch {
       setError('Google login failed. Please try again.');

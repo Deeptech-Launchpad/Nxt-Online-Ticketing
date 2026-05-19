@@ -2,6 +2,7 @@ const express    = require('express');
 const router     = express.Router();
 const nodemailer = require('nodemailer');
 const pool       = require('../db');
+const { checkAccess } = require('../utils/nxtpeople');
 require('dotenv').config();
 
 // In-memory OTP store: { email: { code, expiresAt } }
@@ -139,11 +140,25 @@ router.post('/verify-otp', async (req, res) => {
   }
   if (record.code !== code.toString()) return res.status(400).json({ error: 'Invalid code. Please try again.' });
 
-  // Valid — clear OTP, ensure a users row exists, then respond
+  // OTP valid → clear it before the access gate so it can't be replayed
   delete otpStore[email.toLowerCase()];
+
+  // ── NxtPeople central HR gate ──
+  // Even with a correct OTP, NxtPeople has final say on whether this
+  // person is currently an authorized employee for this app.
+  const access = await checkAccess(email);
+  if (!access.allowed) {
+    console.log(`[auth] verify-otp denied for ${email}: ${access.reason}`);
+    return res.status(403).json({
+      error: 'Access denied by HR',
+      reason: access.reason,
+    });
+  }
+
+  // Access granted → onboard locally and respond
   const role = isAdmin(email) ? 'admin' : 'employee';
   await ensureUserRow(email);
-  res.json({ success: true, email, role });
+  res.json({ success: true, email, role, employee: access.employee || null });
 });
 
 // ── POST /api/auth/check-role ────────────────────────────────
@@ -151,9 +166,21 @@ router.post('/verify-otp', async (req, res) => {
 router.post('/check-role', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
+
+  // ── NxtPeople central HR gate ──
+  // Google verified the email, but NxtPeople has final say.
+  const access = await checkAccess(email);
+  if (!access.allowed) {
+    console.log(`[auth] check-role denied for ${email}: ${access.reason}`);
+    return res.status(403).json({
+      error: 'Access denied by HR',
+      reason: access.reason,
+    });
+  }
+
   const role = isAdmin(email) ? 'admin' : 'employee';
   await ensureUserRow(email);
-  res.json({ role, email });
+  res.json({ role, email, employee: access.employee || null });
 });
 
 module.exports = router;
