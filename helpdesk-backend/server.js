@@ -167,18 +167,10 @@ async function initDatabase() {
       ON CONFLICT (name) DO NOTHING;
     `);
 
-    // Seed demo users
-    await pool.query(`
-      INSERT INTO demo_users (name, email) VALUES
-        ('Sanjana','sanjana@altius.com'),('Rahul','rahul@altius.com'),
-        ('Priya','priya@altius.com'),('Arun','arun@altius.com'),
-        ('Deepika','deepika@altius.com'),('Karthik','karthik@altius.com'),
-        ('Anjali','anjali@altius.com'),('Vijay','vijay@altius.com'),
-        ('Shweta','shweta@altius.com'),('Mani','mani@altius.com')
-      ON CONFLICT (name) DO NOTHING;
-    `);
+    // Demo users seed removed — real users are now created automatically
+    // via OTP/Google login (see ensureUserRow in routes/auth.js).
 
-    // Seed real users
+    // Seed real users (only if users table is completely empty — i.e. fresh install)
     const usersResult = await pool.query('SELECT COUNT(*) FROM users');
     if (parseInt(usersResult.rows[0].count) === 0) {
       await pool.query(`
