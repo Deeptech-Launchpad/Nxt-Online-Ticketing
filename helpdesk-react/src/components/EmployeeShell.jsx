@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
@@ -76,7 +76,7 @@ export function EmployeeShell({ children }) {
     else if (key === 'assets')        navigate('/assets');
     else if (key === 'notifications') navigate('/notifications');
     else if (key === 'profile')       navigate('/profile');
-    else showToast(`${key.charAt(0).toUpperCase() + key.slice(1)} â€” coming soon`, '');
+    else showToast(`${key.charAt(0).toUpperCase() + key.slice(1)} - coming soon`, '');
   };
 
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');

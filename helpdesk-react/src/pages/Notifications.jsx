@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { showToast } from '../components/Toast';
@@ -54,7 +54,7 @@ function mapDbNotif(n) {
   };
 }
 
-// Placeholder demo data removed â€” notifications are now driven entirely by the backend.
+// Placeholder demo data removed - notifications are now driven entirely by the backend.
 
 const SECTION_LABELS = { today: 'TODAY', yesterday: 'YESTERDAY', week: 'THIS WEEK' };
 
@@ -109,7 +109,7 @@ export default function Notifications() {
     }
     const isAdmin = window.location.pathname.startsWith('/admin');
     if (n.type === 'ticket' && n.relatedId) {
-      // ticket detail â€” admin sees /admin/tickets, employee sees /tickets
+      // ticket detail - admin sees /admin/tickets, employee sees /tickets
       navigate(isAdmin ? `/admin/tickets/${n.relatedId}` : `/tickets/${n.relatedId}`);
     } else if (n.type === 'asset') {
       // asset notifications â†’ admin Asset Master, employee My Assets

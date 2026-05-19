@@ -1,4 +1,4 @@
-﻿import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 const NAVY = '#02172E';
 const RED  = '#CC3A3A';
@@ -35,7 +35,7 @@ export default function AdminAssignDevice() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
           <span className="material-symbols-outlined" style={{ color: '#F59E0B', fontSize: 24 }}>build_circle</span>
           <div style={{ fontWeight: 700, fontSize: 15, color: '#92400e' }}>
-            Coming Soon â€” 3-step Assign Device workflow
+            Coming Soon - 3-step Assign Device workflow
           </div>
         </div>
         <div style={{ fontSize: 13, color: '#92400e', lineHeight: 1.6 }}>

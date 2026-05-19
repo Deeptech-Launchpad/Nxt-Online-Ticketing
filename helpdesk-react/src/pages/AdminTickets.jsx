@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { showToast } from '../components/Toast';
@@ -74,7 +74,7 @@ export default function AdminTickets() {
     });
   }, [tickets, search, fStatus, fPriority]);
 
-  // Urgent tickets shown in the banner above the table â€” High + Very High unresolved
+  // Urgent tickets shown in the banner above the table - High + Very High unresolved
   const urgent = useMemo(() => {
     return tickets
       .filter(t => ['High', 'Very High'].includes(t.priority) && ['open', 'reopened'].includes(t.status))
@@ -154,7 +154,7 @@ export default function AdminTickets() {
             textTransform: 'uppercase', letterSpacing: '0.5px',
           }}>
             <div style={{ width: 8, height: 8, background: RED, borderRadius: '50%', animation: 'pulse 2s infinite' }} />
-            Urgent Tickets â€” Require Immediate Response
+            Urgent Tickets - Require Immediate Response
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {urgent.map(t => (
@@ -173,11 +173,11 @@ export default function AdminTickets() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 14, color: NAVY }}>
-                    {t.employeeName} â€” {t.subject}
+                    {t.employeeName} - {t.subject}
                   </div>
                   <div style={{ fontSize: 11, color: RED, fontWeight: 600, marginTop: 2 }}>
                     <span className="material-symbols-outlined" style={{ fontSize: 12, verticalAlign: 'middle' }}>schedule</span>{' '}
-                    {relTime(t.createdAt)} elapsed Â· {t.division}
+                    {relTime(t.createdAt)} elapsed · {t.division}
                   </div>
                 </div>
                 <span style={{
@@ -338,7 +338,7 @@ function Row({ ticket, onView, onClaim, onReopen }) {
           {ticket.subject}
         </div>
       </td>
-      <td style={tdStyle}>{ticket.device || 'â€”'}</td>
+      <td style={tdStyle}>{ticket.device || '-'}</td>
       <td style={tdStyle}>
         <span style={{
           padding: '4px 10px', borderRadius: 20,
@@ -357,10 +357,10 @@ function Row({ ticket, onView, onClaim, onReopen }) {
           {st.label}
         </span>
       </td>
-      <td style={tdStyle}>{ticket.createdAt?.split(',')[0] || 'â€”'}</td>
+      <td style={tdStyle}>{ticket.createdAt?.split(',')[0] || '-'}</td>
       <td style={tdStyle}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {/* Eye icon â€” always visible */}
+          {/* Eye icon - always visible */}
           <button
             onClick={e => { e.stopPropagation(); onView(); }}
             title="View details"

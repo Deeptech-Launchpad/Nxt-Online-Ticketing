@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
@@ -198,7 +198,7 @@ function TicketCard({ ticket, onClick }) {
         }}>
           <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{catIcon}</span>
           {ticket.category || 'General'}
-          <span>Â·</span>
+          <span>·</span>
           <span>Created {ticket.createdAt}</span>
         </div>
       </div>

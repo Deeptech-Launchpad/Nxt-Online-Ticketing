@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
@@ -140,7 +140,7 @@ export function AdminShell({ children }) {
           }}>âŒ˜K</kbd>
         </div>
 
-        {/* Dark mode toggle â€” marginLeft:auto pushes this + everything after to the right corner */}
+        {/* Dark mode toggle - marginLeft:auto pushes this + everything after to the right corner */}
         <div
           onClick={toggleTheme}
           title={isDark ? 'Switch to light' : 'Switch to dark'}

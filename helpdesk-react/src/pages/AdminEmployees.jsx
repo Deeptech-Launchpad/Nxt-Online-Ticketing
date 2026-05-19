@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { showToast } from '../components/Toast';
@@ -68,7 +68,7 @@ export default function AdminEmployees() {
   /* Initial load + refresh */
   const reload = async () => {
     const [u, a] = await Promise.all([fetchEmployees(), fetchAllAllocations()]);
-    // Filter out admin accounts â€” this page lists EMPLOYEES only.
+    // Filter out admin accounts - this page lists EMPLOYEES only.
     setUsers(Array.isArray(u) ? u.filter(x => x.role !== 'admin') : []);
     setAllocations(Array.isArray(a) ? a : []);
   };
@@ -123,20 +123,38 @@ export default function AdminEmployees() {
     const q = search.trim().toLowerCase();
     if (!q) return users;
     return users.filter(u => {
-      if ((u.name || '').toLowerCase().includes(q)) return true;
-      if ((u.dept || '').toLowerCase().includes(q)) return true;
-      if ((u.division || '').toLowerCase().includes(q)) return true;
-      if ((u.id || '').toLowerCase().includes(q)) return true;
+      // User fields
+      if ((u.name         || '').toLowerCase().includes(q)) return true;
+      if ((u.id           || '').toLowerCase().includes(q)) return true;
+      if ((u.email        || '').toLowerCase().includes(q)) return true;
+      if ((u.dept         || '').toLowerCase().includes(q)) return true;
+      if ((u.division     || '').toLowerCase().includes(q)) return true;
+      if ((u.organization || '').toLowerCase().includes(q)) return true;
+      if ((u.designation  || '').toLowerCase().includes(q)) return true;
+      if ((u.phone        || '').toLowerCase().includes(q)) return true;
+
+      // Asset fields (any asset assigned to this user)
       const userAssets = assetsByEmail[(u.email || '').trim().toLowerCase()] || [];
       if (userAssets.some(a =>
-        (a.asset_name || '').toLowerCase().includes(q) ||
-        (a.asset_id   || '').toLowerCase().includes(q) ||
-        (a.asset_type || '').toLowerCase().includes(q) ||
-        (a.asset_brand|| '').toLowerCase().includes(q)
+        (a.asset_name  || '').toLowerCase().includes(q) ||
+        (a.asset_id    || '').toLowerCase().includes(q) ||
+        (a.asset_type  || '').toLowerCase().includes(q) ||
+        (a.asset_brand || '').toLowerCase().includes(q)
       )) return true;
+
+      // Ticket fields (any ticket raised by this user)
+      const userTickets = ticketsForUser(u);
+      if (userTickets.some(t =>
+        (t.id       || '').toLowerCase().includes(q) ||
+        (t.subject  || '').toLowerCase().includes(q) ||
+        (t.category || '').toLowerCase().includes(q) ||
+        (t.status   || '').toLowerCase().includes(q) ||
+        (t.priority || '').toLowerCase().includes(q)
+      )) return true;
+
       return false;
     });
-  }, [users, search, assetsByEmail]);
+  }, [users, search, assetsByEmail, ticketsByKey]);
 
   return (
     <div style={{ animation: 'fadeIn 0.3s ease' }}>
@@ -174,7 +192,7 @@ export default function AdminEmployees() {
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search by name, department, organization, or assetâ€¦"
+          placeholder="Search by name, email, EMP ID, asset, ticket ID or subject..."
           style={{
             width: '100%', padding: '12px 14px 12px 44px',
             border: '1px solid var(--slate)', borderRadius: 10,
@@ -273,7 +291,7 @@ function EmployeeCard({ user, assets, tickets, openCount, expanded, onToggle, on
             </span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-            {user.designation ? `${user.designation} Â· ` : ''}{user.dept || 'â€”'}
+            {[user.designation, user.dept].filter(Boolean).join(' · ') || '—'}
           </div>
         </div>
 
@@ -387,7 +405,7 @@ function EmployeeCard({ user, assets, tickets, openCount, expanded, onToggle, on
                         </span>
                       </Td>
                       <Td><span style={{ color: 'var(--text-muted)' }}>{a.asset_id}</span></Td>
-                      <Td>{a.asset_type || 'â€”'}</Td>
+                      <Td>{a.asset_type || '—'}</Td>
                       <Td>
                         <Pill
                           color={a.warranty_status === 'Expired' ? RED : GREEN}
@@ -443,7 +461,7 @@ function EmployeeCard({ user, assets, tickets, openCount, expanded, onToggle, on
                         {t.subject}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                        {t.category || 'General'} Â· {t.createdAt}
+                        {t.category || 'General'} · {t.createdAt}
                       </div>
                     </div>
                     <Pill color={sp.color} bg={sp.bg} text={sp.label} />
@@ -579,7 +597,7 @@ function AddEmployeeModal({ onClose, onSubmit }) {
               boxShadow: canSubmit && !submitting ? '0 4px 12px rgba(204,58,58,0.25)' : 'none',
             }}
           >
-            {submitting ? 'Addingâ€¦' : 'Add Employee'}
+            {submitting ? 'Adding...' : 'Add Employee'}
           </button>
         </div>
       </div>

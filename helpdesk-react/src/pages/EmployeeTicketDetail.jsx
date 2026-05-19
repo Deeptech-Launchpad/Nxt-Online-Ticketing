@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { showToast } from '../components/Toast';
@@ -69,7 +69,7 @@ export default function EmployeeTicketDetail() {
   // Timeline items
   const timeline = [
     { label: 'Submitted',          time: t.createdAt,    state: activeIdx > 0 ? 'done' : (activeIdx === 0 ? 'active' : 'pending') },
-    { label: 'Assigned to Admin',  time: t.assignedTo ? (t.history.find(h => h.label.toLowerCase().includes('assign'))?.time || 'â€”') : 'Pending', state: activeIdx > 1 ? 'done' : (activeIdx === 1 ? 'active' : 'pending') },
+    { label: 'Assigned to Admin',  time: t.assignedTo ? (t.history.find(h => h.label.toLowerCase().includes('assign'))?.time || '-') : 'Pending', state: activeIdx > 1 ? 'done' : (activeIdx === 1 ? 'active' : 'pending') },
     { label: 'In Progress',        time: t.inProgressAt || 'Pending', state: activeIdx > 2 ? 'done' : (activeIdx === 2 ? 'active' : 'pending') },
     { label: 'Resolved',           time: t.resolvedAt   || 'Pending', state: activeIdx === 3 ? 'done' : 'pending' },
   ];
@@ -120,7 +120,7 @@ export default function EmployeeTicketDetail() {
                 <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>Category:</span>&nbsp;<strong>{t.category || 'General'}</strong>
               </span>
               <span>
-                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>Device:</span>&nbsp;<strong>{t.device || 'â€”'}</strong>
+                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>Device:</span>&nbsp;<strong>{t.device || '-'}</strong>
               </span>
               <span>
                 <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>Remote:</span>&nbsp;<strong>{t.remote || 'In Person'}</strong>
@@ -363,7 +363,7 @@ function MessageBubble({ msg, self }) {
           fontSize: 11, color: 'var(--text-muted)',
           marginBottom: 4, textAlign: self ? 'right' : 'left',
         }}>
-          {self ? 'You' : msg.name} Â· {msg.time}
+          {self ? 'You' : msg.name} · {msg.time}
         </div>
         <div style={{
           padding: '10px 14px', borderRadius: 10,
@@ -421,7 +421,7 @@ function TimelineItem({ label, time, state, isLast }) {
           fontSize: 11, marginTop: 2,
           color: state === 'done' || state === 'active' ? RED : 'var(--text-muted)',
         }}>
-          {state === 'pending' ? 'Pending' : (time || 'â€”')}
+          {state === 'pending' ? 'Pending' : (time || '-')}
         </div>
       </div>
     </div>

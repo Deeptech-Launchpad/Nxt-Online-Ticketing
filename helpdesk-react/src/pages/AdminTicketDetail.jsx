@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Modal } from '../components/Modal';
@@ -65,7 +65,7 @@ export default function AdminTicketDetail() {
 
   const timeline = [
     { label: 'Ticket Created',          time: t.createdAt,                                                         state: activeIdx > 0 ? 'done' : 'active' },
-    { label: t.assignedTo ? `Assigned to ${t.assignedTo}` : 'Awaiting Assignment',  time: t.assignedTo ? 'â€”' : 'Pending',                                state: activeIdx > 1 ? 'done' : (activeIdx === 1 ? 'active' : 'pending') },
+    { label: t.assignedTo ? `Assigned to ${t.assignedTo}` : 'Awaiting Assignment',  time: t.assignedTo ? '-' : 'Pending',                                state: activeIdx > 1 ? 'done' : (activeIdx === 1 ? 'active' : 'pending') },
     { label: 'Status changed to In Progress', time: t.inProgressAt || 'Pending',                                  state: activeIdx > 2 ? 'done' : (activeIdx === 2 ? 'active' : 'pending') },
     { label: 'Resolution',              time: t.resolvedAt || 'Pending',                                          state: activeIdx === 3 ? 'done' : 'pending' },
   ];
@@ -217,7 +217,7 @@ export default function AdminTicketDetail() {
             )}
             <div style={{ display: 'flex', gap: 24, paddingTop: 12, borderTop: '1px solid var(--slate)', flexWrap: 'wrap' }}>
               <Meta label="Category" value={t.category || 'General'} icon="folder" />
-              <Meta label="Affected Device" value={t.device || 'â€”'} icon="laptop" valueColor={GREEN} />
+              <Meta label="Affected Device" value={t.device || '-'} icon="laptop" valueColor={GREEN} />
               <Meta label="Remote" value={t.remote || 'In Person'} icon="desktop_windows" />
             </div>
           </SectionCard>
@@ -255,7 +255,7 @@ export default function AdminTicketDetail() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{a.fileName}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {a.size ? `${Math.round(a.size / 1024)} KB Â· ` : ''}Click to view
+                        {a.size ? `${Math.round(a.size / 1024)} KB · ` : ''}Click to view
                       </div>
                     </div>
                     <span className="material-symbols-outlined" style={{ fontSize: 18, color: RED }}>open_in_new</span>
@@ -405,8 +405,8 @@ export default function AdminTicketDetail() {
               </div>
             </div>
             <InfoRow label="Employee ID" value={t.employeeId} />
-            <InfoRow label="Division"    value={t.division || 'â€”'} />
-            <InfoRow label="Department"  value={t.dept || 'â€”'} />
+            <InfoRow label="Division"    value={t.division || '-'} />
+            <InfoRow label="Department"  value={t.dept || '-'} />
             <a style={{
               fontSize: 12, color: RED, fontWeight: 600, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 4, marginTop: 10,
@@ -435,7 +435,7 @@ export default function AdminTicketDetail() {
                 <div style={{ fontWeight: 600, fontSize: 13 }}>{linkedAsset.name}</div>
               </div>
             </div>
-            <InfoRow label="Serial"    value={linkedAsset.serial || 'â€”'} />
+            <InfoRow label="Serial"    value={linkedAsset.serial || '-'} />
             <InfoRow label="Warranty"  value={linkedAsset.warranty || 'Unknown'} accent={GREEN} />
             <InfoRow label="Condition" value={linkedAsset.condition || 'Unknown'} />
           </SectionCard>
@@ -503,7 +503,7 @@ export default function AdminTicketDetail() {
 
 /* Parse a device string like "Dell Latitude 5520 (AST-2022-094)" into parts */
 function parseDevice(deviceStr) {
-  if (!deviceStr) return { name: 'â€”', id: 'â€”', serial: null, warranty: null, condition: null };
+  if (!deviceStr) return { name: '-', id: '-', serial: null, warranty: null, condition: null };
   const m = deviceStr.match(/^(.+?)\s*\(([^)]+)\)$/);
   if (m) {
     return {
@@ -514,7 +514,7 @@ function parseDevice(deviceStr) {
       condition: null,
     };
   }
-  return { name: deviceStr, id: 'â€”', serial: null, warranty: null, condition: null };
+  return { name: deviceStr, id: '-', serial: null, warranty: null, condition: null };
 }
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ COMPONENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -586,7 +586,7 @@ function MessageBubble({ msg, self }) {
           fontSize: 11, color: 'var(--text-muted)',
           marginBottom: 4, textAlign: self ? 'right' : 'left',
         }}>
-          {self ? 'You' : msg.name} Â· {msg.time}
+          {self ? 'You' : msg.name} · {msg.time}
         </div>
         <div style={{
           padding: '10px 14px', borderRadius: 10,
@@ -655,7 +655,7 @@ function TimelineItem({ label, time, state, isLast }) {
           fontSize: 11, marginTop: 2,
           color: state === 'done' || state === 'active' ? RED : 'var(--text-muted)',
         }}>
-          {state === 'pending' ? 'Pending' : (time || 'â€”')}
+          {state === 'pending' ? 'Pending' : (time || '-')}
         </div>
       </div>
     </div>

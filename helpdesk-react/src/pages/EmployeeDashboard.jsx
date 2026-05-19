@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
@@ -91,7 +91,7 @@ export default function EmployeeDashboard() {
   // Today's date pretty
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  // Recent tickets â€” top 3, newest first by id presence (already sorted from API)
+  // Recent tickets - top 3, newest first by id presence (already sorted from API)
   const recentTickets = mine.slice(0, 3);
 
   return (
@@ -132,7 +132,7 @@ export default function EmployeeDashboard() {
             fontSize: 14, color: 'rgba(255,255,255,0.7)',
             maxWidth: 460, lineHeight: 1.6, margin: 0,
           }}>
-            Track your IT support requests, view assigned assets, and raise new tickets â€” all in one place.
+            Track your IT support requests, view assigned assets, and raise new tickets - all in one place.
           </p>
 
           {/* Glass stat tiles */}
@@ -186,7 +186,7 @@ export default function EmployeeDashboard() {
           onAction={() => navigate('/history')}
         >
           {recentTickets.length === 0 ? (
-            <EmptyState message="No tickets yet â€” raise your first one." />
+            <EmptyState message="No tickets yet - raise your first one." />
           ) : (
             recentTickets.map(t => (
               <TicketRow key={t.id} ticket={t} onClick={() => navigate(`/tickets/${t.id}`)} />
@@ -194,7 +194,7 @@ export default function EmployeeDashboard() {
           )}
         </Section>
 
-        {/* My Assets â€” placeholder data */}
+        {/* My Assets - placeholder data */}
         <Section
           title="My Assets"
           icon="devices"

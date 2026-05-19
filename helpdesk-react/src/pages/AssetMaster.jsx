@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 
 const DIVISIONS = ['Guntur -AndhraPradesh', 'RS Puram Coimbatore', 'Saibaba Colony-Coimbatore', 'Thudiyalur-coimbatore', 'WFH'];
 const ASSET_TYPES = ['Laptop', 'Desktop', 'Printer', 'Networking', 'Monitor', 'UPS', 'Phone', 'Other'];
@@ -622,8 +622,8 @@ export default function AssetMaster() {
                   <input type="checkbox" checked={selectedIds.includes(asset.id)} onChange={() => toggleSelect(asset.id)} />
                 </td>
                 <td><span style={{ fontSize: 12.5, fontFamily: "'DM Mono',monospace", color: 'var(--blue)', fontWeight: 700 }}>{asset.id}</span></td>
-                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : 'â€”'}</td>
-                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.purchaseDate ? new Date(asset.purchaseDate).toLocaleDateString() : 'â€”'}</td>
+                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : '-'}</td>
+                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.purchaseDate ? new Date(asset.purchaseDate).toLocaleDateString() : '-'}</td>
                 <td>
                   <div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: 14 }}>{asset.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>{asset.brand}</div>
@@ -655,7 +655,7 @@ export default function AssetMaster() {
                 <td style={{ textAlign: 'center', fontSize: 13, fontWeight: 600 }}>{asset.ownershipType === 'Rent' ? asset.quantity : 0}</td>
                 <td style={{ textAlign: 'center', fontSize: 13, fontWeight: 600 }}>{asset.ownershipType === 'Personal' ? asset.quantity : 0}</td>
                 <td><WarrantyBadge status={asset.warrantyStatus} /></td>
-                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.warrantyExpiry ? new Date(asset.warrantyExpiry).toLocaleDateString() : 'â€”'}</td>
+                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.warrantyExpiry ? new Date(asset.warrantyExpiry).toLocaleDateString() : '-'}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button className="action-btn-gray" title="Allocate/Return" onClick={(e) => { 
                     e.stopPropagation(); 
@@ -1052,7 +1052,7 @@ export default function AssetMaster() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--navy)' }}>Asset Allocation Details</div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{viewingHistory.name} Â· {viewingHistory.id}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{viewingHistory.name} · {viewingHistory.id}</div>
               </div>
               <button onClick={() => setViewingHistory(null)} className="action-btn-gray"><span className="material-symbols-outlined">close</span></button>
             </div>
@@ -1091,7 +1091,7 @@ export default function AssetMaster() {
                             )}
                           </td>
                           <td style={{ padding: '12px 8px', fontSize: 13, color: 'var(--text-muted)' }}>
-                            {h.returned_at ? new Date(h.returned_at).toLocaleDateString() : 'â€”'}
+                            {h.returned_at ? new Date(h.returned_at).toLocaleDateString() : '-'}
                           </td>
                         </tr>
                       ))

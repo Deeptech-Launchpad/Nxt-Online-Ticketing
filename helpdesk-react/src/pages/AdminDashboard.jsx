@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
@@ -115,7 +115,7 @@ export default function AdminDashboard() {
                 <span style={{ background: RED, color: '#fff', fontSize: 9, padding: '2px 6px', borderRadius: 4 }}>HIGH RISK</span>
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                {criticalTicket.employeeName} â€” <strong>{criticalTicket.subject}</strong> Â· created {relTime(criticalTicket.createdAt)}
+                {criticalTicket.employeeName} - <strong>{criticalTicket.subject}</strong> · created {relTime(criticalTicket.createdAt)}
               </div>
             </div>
           </div>
@@ -496,7 +496,7 @@ function FeedRow({ ticket, onView, onClaim }) {
 }
 
 function RadialGauge({ value }) {
-  // Simple visual approximation using border trick â€” not full SVG arc
+  // Simple visual approximation using border trick - not full SVG arc
   return (
     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 28, position: 'relative' }}>
       <div style={{

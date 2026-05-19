@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
@@ -39,7 +39,7 @@ function mapDbAsset(row, idx) {
     icon,
     primary:      row.is_primary || idx === 0,    // first allocated = primary if not flagged
     serialNumber: row.serial_number,
-    assignedDate: row.allocated_at ? new Date(row.allocated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'â€”',
+    assignedDate: row.allocated_at ? new Date(row.allocated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-',
     warranty:     warrantyText,
     warrantyStatus,
     condition:    row.condition || 'Good',
@@ -49,14 +49,14 @@ function mapDbAsset(row, idx) {
     typePillBg:   row.is_primary || idx === 0 ? RED : (typeLower.includes('phone') ? AMBER : BLUE),
     iconBg:       row.is_primary || idx === 0 ? `linear-gradient(135deg, ${RED} 0%, #a82e2e 100%)` : '#f0f9ff',
     iconColor:    row.is_primary || idx === 0 ? '#fff' : BLUE,
-    specs:        row.specs || { os: 'â€”', processor: 'â€”', ram: 'â€”', storage: 'â€”' },
-    purchase:     { from: row.purchase_from || row.vendor_name || 'â€”', invoice: row.purchase_invoice || 'â€”' },
+    specs:        row.specs || { os: '-', processor: '-', ram: '-', storage: '-' },
+    purchase:     { from: row.purchase_from || row.vendor_name || '-', invoice: row.purchase_invoice || '-' },
     serviceHistory: [],
   };
 }
 
 /*
-  PLACEHOLDER DATA â€” shape designed for future backend wiring.
+  PLACEHOLDER DATA - shape designed for future backend wiring.
   Real endpoint will be: GET /api/assets/me
   Expected fields below align with `assets` + `asset_allocations` tables.
 */
@@ -210,7 +210,7 @@ export default function MyAssets() {
           </h1>
           <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
             {assets.length} {assets.length === 1 ? 'device' : 'devices'} assigned to you
-            {usingPlaceholder && <span style={{ color: AMBER, marginLeft: 8 }}>(showing demo data â€” no real assets allocated yet)</span>}
+            {usingPlaceholder && <span style={{ color: AMBER, marginLeft: 8 }}>(showing demo data - no real assets allocated yet)</span>}
           </p>
         </div>
       </div>
@@ -310,7 +310,7 @@ function PrimaryAssetCard({ asset, expanded, onToggle, onRaiseTicket }) {
               </table>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>event</span>
-                Last Serviced: <strong>{asset.serviceHistory[0]?.date || 'â€”'}</strong>
+                Last Serviced: <strong>{asset.serviceHistory[0]?.date || '-'}</strong>
               </div>
             </div>
           </div>

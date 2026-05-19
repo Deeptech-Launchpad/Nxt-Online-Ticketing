@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { showToast } from '../components/Toast';
@@ -25,7 +25,7 @@ const PRIORITIES = [
 ];
 
 /*
-  PLACEHOLDER DEVICE LIST â€” same shape as MyAssets.
+  PLACEHOLDER DEVICE LIST - same shape as MyAssets.
   Real endpoint will be: GET /api/assets/me
 */
 const PLACEHOLDER_DEVICES = [
@@ -329,7 +329,7 @@ function Step2({ devices, selected, setSelected, notes, setNotes, onBack, onNext
           Which device is affected?
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          Showing placeholder devices for the selected category â€” real assets will be wired in next phase.
+          Showing placeholder devices for the selected category - real assets will be wired in next phase.
         </div>
       </div>
 
@@ -443,7 +443,7 @@ function Step4({ subject, category, priority, desc, device, remote, timeSlot, go
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Asset ID / Serial</div>
             <div style={{ fontWeight: 600, fontSize: 13 }}>
-              {device ? `${device.id} (${device.serial})` : 'â€”'}
+              {device ? `${device.id} (${device.serial})` : '-'}
             </div>
           </div>
         </div>

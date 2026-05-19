@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { showToast } from '../components/Toast';
 
@@ -111,12 +111,12 @@ export default function EmployeeProfile() {
           </div>
 
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 18 }}>
-            {form.division || 'â€”'}
+            {form.division || '-'}
           </div>
 
           <div style={{ borderTop: '1px solid var(--slate)', paddingTop: 14, textAlign: 'left' }}>
-            <InfoRow icon="badge" label="Employee ID"   value={currentUser?.id || 'â€”'} />
-            <InfoRow icon="mail"  label="Email"         value={form.email || 'â€”'} />
+            <InfoRow icon="badge" label="Employee ID"   value={currentUser?.id || '-'} />
+            <InfoRow icon="mail"  label="Email"         value={form.email || '-'} />
             <InfoRow icon="call"  label="Phone"         value={form.phone || 'Not set'} />
             <InfoRow icon="confirmation_number" label="Open Tickets" value={`${openTickets} active`} />
           </div>
@@ -130,7 +130,7 @@ export default function EmployeeProfile() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             <FormField label="Full Name"   value={form.name}        onChange={v => setField('name', v)} />
-            <FormField label="Email"       value={form.email}       readOnly hint="Login email â€” cannot be changed" />
+            <FormField label="Email"       value={form.email}       readOnly hint="Login email - cannot be changed" />
             <FormField label="Phone"       value={form.phone}       onChange={v => setField('phone', v)} />
             <FormField label="Designation" value={form.designation} onChange={v => setField('designation', v)} />
             <FormField label="Department"  value={form.dept}        onChange={v => setField('dept', v)} />
@@ -149,7 +149,7 @@ export default function EmployeeProfile() {
                 opacity: saving ? 0.7 : 1,
               }}
             >
-              {saving ? 'Savingâ€¦' : 'Save Profile'}
+              {saving ? 'Saving...' : 'Save Profile'}
             </button>
           </div>
         </div>

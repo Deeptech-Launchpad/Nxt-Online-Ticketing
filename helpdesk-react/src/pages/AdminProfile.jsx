@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { showToast } from '../components/Toast';
 
@@ -112,7 +112,7 @@ export default function AdminProfile() {
 
           <div style={{ borderTop: '1px solid var(--slate)', paddingTop: 14, textAlign: 'left' }}>
             <InfoRow icon="badge"    label="Admin ID"     value={currentUser?.id || 'ADM-001'} />
-            <InfoRow icon="mail"     label="Email"        value={form.email || 'â€”'} />
+            <InfoRow icon="mail"     label="Email"        value={form.email || '-'} />
             <InfoRow icon="security" label="Access Level" value="Full System Access" />
           </div>
         </div>
@@ -133,7 +133,7 @@ export default function AdminProfile() {
               label="Admin Email"
               value={form.email}
               readOnly
-              hint="Email is your login key â€” cannot be changed"
+              hint="Email is your login key - cannot be changed"
             />
             <FormField
               label="Support Role"
@@ -166,7 +166,7 @@ export default function AdminProfile() {
                 opacity: saving ? 0.7 : 1,
               }}
             >
-              {saving ? 'Savingâ€¦' : 'Save Admin Settings'}
+              {saving ? 'Saving...' : 'Save Admin Settings'}
             </button>
           </div>
         </div>
