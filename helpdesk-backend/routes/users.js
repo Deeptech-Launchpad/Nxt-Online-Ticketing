@@ -58,9 +58,11 @@ router.post('/', async (req, res) => {
       return res.status(409).json({ error: `Email ${cleanEmail} is already registered` });
     }
 
+    // source='manual' tells the NxtPeople login gate to allow this user
+    // even if they aren't in NxtPeople (e.g. branch employees).
     const result = await pool.query(`
-      INSERT INTO users (id, name, division, dept, avatar, email, role, designation, phone, organization)
-      VALUES ($1, $2, $3, $4, $5, $6, 'employee', $7, $8, $9)
+      INSERT INTO users (id, name, division, dept, avatar, email, role, designation, phone, organization, source)
+      VALUES ($1, $2, $3, $4, $5, $6, 'employee', $7, $8, $9, 'manual')
       RETURNING *`,
       [
         id.trim(),

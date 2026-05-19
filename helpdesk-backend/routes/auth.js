@@ -48,22 +48,75 @@ function initialsFrom(name) {
  * Uses email as both id and email (matches LoginPage.jsx convention
  * where currentUser.id === email for non-admin OTP/OAuth users).
  */
-async function ensureUserRow(email) {
+async function ensureUserRow(email, source = 'nxtpeople') {
   if (!email) return;
   const cleanEmail = email.trim().toLowerCase();
   const role = isAdmin(cleanEmail) ? 'admin' : 'employee';
   const name = nameFromEmail(cleanEmail);
   const avatar = initialsFrom(name);
+  // Admin emails are essentially "manually approved" via env config, so
+  // they get source='manual' to match the bypass rules in the gate.
+  const effectiveSource = isAdmin(cleanEmail) ? 'manual' : source;
 
   try {
     await pool.query(`
-      INSERT INTO users (id, name, email, role, avatar)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO users (id, name, email, role, avatar, source)
+      VALUES ($1, $2, $3, $4, $5, $6)
       ON CONFLICT (id) DO NOTHING
-    `, [cleanEmail, name, cleanEmail, role, avatar]);
+    `, [cleanEmail, name, cleanEmail, role, avatar, effectiveSource]);
   } catch (err) {
     console.error('[auth] ensureUserRow failed:', err.message);
   }
+}
+
+/**
+ * Central gate: decides if an email is allowed to log in.
+ * Returns { allowed: true } or { allowed: false, reason: <code> }.
+ *
+ * Precedence (first match wins):
+ *   1. Admin safety net — emails in ADMIN_EMAILS env always allowed
+ *      (so admin can never be locked out by a NxtPeople outage)
+ *   2. NxtPeople says yes → allowed
+ *   3. NxtPeople says no BUT user exists with source='manual' → allowed
+ *      (admin-added branch employees bypass NxtPeople)
+ *   4. Otherwise → blocked with NOT_REGISTERED (friendly to user)
+ *      unless NxtPeople returned a network/config error (returns that
+ *      reason so the frontend shows "service temporarily unavailable").
+ */
+async function gateLoginAccess(email) {
+  const clean = String(email || '').trim().toLowerCase();
+  if (!clean) return { allowed: false, reason: 'NOT_REGISTERED' };
+
+  // 1. Admin bypass
+  if (isAdmin(clean)) {
+    return { allowed: true, via: 'admin' };
+  }
+
+  // 2. NxtPeople
+  const access = await checkAccess(clean);
+  if (access.allowed) {
+    return { allowed: true, via: 'nxtpeople', employee: access.employee };
+  }
+
+  // 3. Manual admin-added fallback
+  try {
+    const r = await pool.query(
+      "SELECT 1 FROM users WHERE LOWER(email) = $1 AND source = 'manual' LIMIT 1",
+      [clean]
+    );
+    if (r.rows.length > 0) {
+      return { allowed: true, via: 'manual' };
+    }
+  } catch (err) {
+    console.error('[auth] manual lookup failed:', err.message);
+  }
+
+  // 4. Block. Network/config issues bubble up their own reason so the
+  //    user sees "service temporarily unavailable" instead of "not registered".
+  if (['NETWORK_ERROR', 'CONFIG_MISSING', 'INVALID_KEY', 'RATE_LIMITED'].includes(access.reason)) {
+    return { allowed: false, reason: access.reason };
+  }
+  return { allowed: false, reason: 'NOT_REGISTERED' };
 }
 
 // ── Helper: create mail transporter ─────────────────────────
@@ -143,22 +196,23 @@ router.post('/verify-otp', async (req, res) => {
   // OTP valid → clear it before the access gate so it can't be replayed
   delete otpStore[email.toLowerCase()];
 
-  // ── NxtPeople central HR gate ──
-  // Even with a correct OTP, NxtPeople has final say on whether this
-  // person is currently an authorized employee for this app.
-  const access = await checkAccess(email);
-  if (!access.allowed) {
-    console.log(`[auth] verify-otp denied for ${email}: ${access.reason}`);
+  // ── Login access gate ──
+  // Admin bypass → NxtPeople → manual fallback → block
+  const gate = await gateLoginAccess(email);
+  if (!gate.allowed) {
+    console.log(`[auth] verify-otp denied for ${email}: ${gate.reason}`);
     return res.status(403).json({
-      error: 'Access denied by HR',
-      reason: access.reason,
+      error: 'Access denied',
+      reason: gate.reason,
     });
   }
+  console.log(`[auth] verify-otp allowed for ${email} via ${gate.via}`);
 
-  // Access granted → onboard locally and respond
+  // Access granted → onboard locally and respond.
+  // Tag the new row with the source that admitted them (nxtpeople / manual / admin).
   const role = isAdmin(email) ? 'admin' : 'employee';
-  await ensureUserRow(email);
-  res.json({ success: true, email, role, employee: access.employee || null });
+  await ensureUserRow(email, gate.via === 'nxtpeople' ? 'nxtpeople' : 'manual');
+  res.json({ success: true, email, role, employee: gate.employee || null });
 });
 
 // ── POST /api/auth/check-role ────────────────────────────────
@@ -167,20 +221,20 @@ router.post('/check-role', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
-  // ── NxtPeople central HR gate ──
-  // Google verified the email, but NxtPeople has final say.
-  const access = await checkAccess(email);
-  if (!access.allowed) {
-    console.log(`[auth] check-role denied for ${email}: ${access.reason}`);
+  // Same gate logic as OTP: admin → NxtPeople → manual fallback → block
+  const gate = await gateLoginAccess(email);
+  if (!gate.allowed) {
+    console.log(`[auth] check-role denied for ${email}: ${gate.reason}`);
     return res.status(403).json({
-      error: 'Access denied by HR',
-      reason: access.reason,
+      error: 'Access denied',
+      reason: gate.reason,
     });
   }
+  console.log(`[auth] check-role allowed for ${email} via ${gate.via}`);
 
   const role = isAdmin(email) ? 'admin' : 'employee';
-  await ensureUserRow(email);
-  res.json({ role, email, employee: access.employee || null });
+  await ensureUserRow(email, gate.via === 'nxtpeople' ? 'nxtpeople' : 'manual');
+  res.json({ role, email, employee: gate.employee || null });
 });
 
 module.exports = router;

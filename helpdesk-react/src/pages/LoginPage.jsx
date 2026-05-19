@@ -240,22 +240,24 @@ export default function LoginPage() {
     if (e.key === 'Enter') handleVerify();
   };
 
-  // Friendly messages for NxtPeople 403 reason codes
+  // Friendly messages for backend 403 reason codes
   const accessDeniedMessage = (reason) => {
     switch (reason) {
+      case 'NOT_REGISTERED':
+        return 'Your email is not registered in our system. Please contact your admin to add your account.';
       case 'NOT_GRANTED':
         return "Your account exists but HR hasn't given you access to this app. Please contact HR.";
       case 'EMPLOYEE_INACTIVE':
         return 'Your employment status does not allow access. Please contact HR.';
       case 'NOT_FOUND':
-        return 'Email not recognised. Please contact HR.';
+        return 'Your email is not registered in our system. Please contact your admin to add your account.';
       case 'INVALID_KEY':
       case 'RATE_LIMITED':
       case 'NETWORK_ERROR':
       case 'CONFIG_MISSING':
         return 'Login service temporarily unavailable. Please try again in a minute.';
       default:
-        return 'Access denied. Please contact HR.';
+        return 'Access denied. Please contact your admin.';
     }
   };
 

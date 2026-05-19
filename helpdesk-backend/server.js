@@ -255,6 +255,21 @@ async function initDatabase() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS organization VARCHAR(150);
     `);
 
+    // ── NxtPeople access gate: track WHERE a user record came from ──
+    //   'manual'    = added by admin via Add Employee modal (bypasses NxtPeople)
+    //   'nxtpeople' = auto-created on successful NxtPeople-approved login
+    //   NULL        = legacy row (pre-gate). The UPDATE below marks all such
+    //                 rows as 'manual' so existing users don't get locked out.
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS source VARCHAR(20);
+    `);
+    const sourceFix = await pool.query(`
+      UPDATE users SET source = 'manual' WHERE source IS NULL RETURNING id
+    `);
+    if (sourceFix.rowCount > 0) {
+      console.log(`✅ Marked ${sourceFix.rowCount} legacy user(s) as source='manual'`);
+    }
+
     // Notifications table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS notifications (
