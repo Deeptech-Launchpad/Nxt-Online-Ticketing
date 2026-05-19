@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 
 const AppContext = createContext(null);
-const API = 'http://localhost:5000/api';
-const FILE_BASE = 'http://localhost:5000';
+// Relative paths — works in dev (Vite proxy) and production (Nginx proxy)
+const API = '/api';
+const FILE_BASE = '';
 
 export function AppProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {

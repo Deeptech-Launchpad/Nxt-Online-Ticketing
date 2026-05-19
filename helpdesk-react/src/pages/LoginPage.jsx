@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-const API = 'http://localhost:5000/api';
+const API = '/api';
 
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');

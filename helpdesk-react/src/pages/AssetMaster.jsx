@@ -135,7 +135,7 @@ function FormField({ label, required, children, span }) {
   );
 }
 
-const API = 'http://localhost:5000/api';
+const API = '/api';
 
 export default function AssetMaster() {
   const [assets, setAssets] = useState([]);
