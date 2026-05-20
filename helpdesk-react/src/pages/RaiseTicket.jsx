@@ -47,9 +47,9 @@ const REMOTES = [
 ];
 
 const TIME_SLOTS = [
-  '9 AM â€“ 10 AM', '10 AM â€“ 11 AM', '11 AM â€“ 12 PM',
-  '12 PM â€“ 1 PM', '1 PM â€“ 2 PM',   '2 PM â€“ 3 PM',
-  '3 PM â€“ 4 PM',  '4 PM â€“ 5 PM',   'Any Time',
+  '9 AM - 10 AM', '10 AM - 11 AM', '11 AM - 12 PM',
+  '12 PM - 1 PM', '1 PM - 2 PM',   '2 PM - 3 PM',
+  '3 PM - 4 PM',  '4 PM - 5 PM',   'Any Time',
 ];
 
 const STEPS = ['Issue Details', 'Device & Asset', 'Remote Access', 'Review'];
