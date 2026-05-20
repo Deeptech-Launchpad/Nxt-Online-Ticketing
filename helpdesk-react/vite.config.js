@@ -7,6 +7,13 @@ import react from '@vitejs/plugin-react'
 // backend so the React code can use relative URLs everywhere.
 export default defineConfig({
   plugins: [react()],
+  // Output built JS/CSS to dist/static/ instead of the default dist/assets/.
+  // /assets is one of our SPA routes (My Assets page) and on the server it
+  // collided with this folder, making Nginx return 403 instead of serving
+  // index.html for the SPA fallback.
+  build: {
+    assetsDir: 'static',
+  },
   server: {
     port: 8090,
     proxy: {
