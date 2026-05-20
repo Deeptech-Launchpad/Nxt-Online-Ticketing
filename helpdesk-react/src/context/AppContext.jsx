@@ -210,6 +210,21 @@ export function AppProvider({ children }) {
     }
   };
 
+  const setUserStatus = async (userId, status) => {
+    try {
+      const res = await fetch(`${API}/users/${encodeURIComponent(userId)}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { ok: false, error: data.error || 'Failed to update status' };
+      return { ok: true, user: data };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  };
+
   /**
    * Update the currently logged-in user's profile.
    * Payload may include: name, phone, designation, dept, division.
@@ -321,7 +336,7 @@ export function AppProvider({ children }) {
       addMessage, setStatus, assignTicket, setResolution,
       getMyTickets, updatePriority, refreshTickets: fetchTickets,
       fetchMyAssets, fetchAllAllocations,
-      fetchEmployees, addEmployee, updateProfile,
+      fetchEmployees, addEmployee, setUserStatus, updateProfile,
       fetchNotifications, markNotifRead, markAllNotifRead,
     }}>
       {children}

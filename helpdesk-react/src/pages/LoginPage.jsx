@@ -243,6 +243,8 @@ export default function LoginPage() {
   // Friendly messages for backend 403 reason codes
   const accessDeniedMessage = (reason) => {
     switch (reason) {
+      case 'ACCOUNT_INACTIVE':
+        return 'Your account has been deactivated. Please contact your admin to reactivate it.';
       case 'NOT_REGISTERED':
         return 'Your email is not registered in our system. Please contact your admin to add your account.';
       case 'NOT_GRANTED':

@@ -270,6 +270,16 @@ async function initDatabase() {
       console.log(`✅ Marked ${sourceFix.rowCount} legacy user(s) as source='manual'`);
     }
 
+    // ── Account status (active/inactive) — admin toggle in Employees page ──
+    // Inactive users are blocked at the login gate even if NxtPeople approves
+    // them. Default 'active' so existing rows keep working.
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
+    `);
+    await pool.query(`
+      UPDATE users SET status = 'active' WHERE status IS NULL;
+    `);
+
     // Notifications table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS notifications (

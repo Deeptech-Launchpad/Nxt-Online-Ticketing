@@ -130,4 +130,39 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// ── PATCH update account status (admin: deactivate / reactivate) ──
+// Body: { status: 'active' | 'inactive' }
+// Refuses to deactivate any email listed in ADMIN_EMAILS env var so the
+// admin can never lock themselves out from the UI.
+router.patch('/:id/status', async (req, res) => {
+  const { status } = req.body;
+  if (!['active', 'inactive'].includes(status)) {
+    return res.status(400).json({ error: "status must be 'active' or 'inactive'" });
+  }
+
+  try {
+    const existing = await pool.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const cur = existing.rows[0];
+
+    // Admin protection — never let the UI deactivate a system admin
+    const adminList = (process.env.ADMIN_EMAILS || '')
+      .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const targetEmail = (cur.email || '').trim().toLowerCase();
+    if (status === 'inactive' && adminList.includes(targetEmail)) {
+      return res.status(403).json({ error: 'Admin accounts cannot be deactivated from the UI.' });
+    }
+
+    const result = await pool.query(
+      'UPDATE users SET status = $1 WHERE id = $2 RETURNING *',
+      [status, req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

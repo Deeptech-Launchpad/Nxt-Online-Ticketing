@@ -56,8 +56,15 @@ const STATUS_PILL = {
   closed:        { bg: '#f0fdf4', color: '#16a34a', label: 'Closed' },
 };
 
+// Emails that should be protected from local inactivation (the system admins).
+// Kept on the frontend purely to hide the button — the real enforcement
+// lives in the backend's PATCH /:id/status endpoint.
+const ADMIN_PROTECTED_EMAILS = new Set([
+  'sanjana@altiusnxt.com',
+]);
+
 export default function AdminEmployees() {
-  const { tickets, fetchEmployees, fetchAllAllocations, addEmployee } = useApp();
+  const { tickets, fetchEmployees, fetchAllAllocations, addEmployee, setUserStatus } = useApp();
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [allocations, setAllocations] = useState([]);
@@ -211,6 +218,7 @@ export default function AdminEmployees() {
             const userAssets = assetsByEmail[(u.email || '').trim().toLowerCase()] || [];
             const userTickets = ticketsForUser(u);
             const isOpen = !!expanded[u.id];
+            const isProtected = ADMIN_PROTECTED_EMAILS.has((u.email || '').trim().toLowerCase());
             return (
               <EmployeeCard
                 key={u.id}
@@ -219,8 +227,28 @@ export default function AdminEmployees() {
                 tickets={userTickets}
                 openCount={openCountFor(u)}
                 expanded={isOpen}
+                isProtected={isProtected}
                 onToggle={() => setExpanded(prev => ({ ...prev, [u.id]: !prev[u.id] }))}
                 onTicketClick={(tid) => navigate(`/admin/tickets/${tid}`)}
+                onToggleStatus={async () => {
+                  const targetStatus = (u.status === 'inactive') ? 'active' : 'inactive';
+                  const verb = targetStatus === 'inactive'
+                    ? `Mark ${u.name} as inactive? They won't be able to log in until you re-activate them.`
+                    : `Restore login access for ${u.name}?`;
+                  if (!window.confirm(verb)) return;
+                  const result = await setUserStatus(u.id, targetStatus);
+                  if (result.ok) {
+                    showToast(
+                      targetStatus === 'inactive'
+                        ? `${u.name} is now inactive — login blocked.`
+                        : `${u.name} is now active — login restored.`,
+                      'success'
+                    );
+                    await reload();
+                  } else {
+                    showToast(result.error || 'Failed to update status', 'error');
+                  }
+                }}
               />
             );
           })
@@ -249,14 +277,16 @@ export default function AdminEmployees() {
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ EMPLOYEE CARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-function EmployeeCard({ user, assets, tickets, openCount, expanded, onToggle, onTicketClick }) {
+function EmployeeCard({ user, assets, tickets, openCount, expanded, isProtected, onToggle, onTicketClick, onToggleStatus }) {
   const initials = user.avatar || (user.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const isInactive = user.status === 'inactive';
 
   return (
     <div style={{
       background: 'var(--white)', borderRadius: 12,
       border: '1px solid var(--slate)', overflow: 'hidden',
       transition: 'all 0.18s',
+      opacity: isInactive ? 0.7 : 1,
       ...(expanded ? { borderColor: RED, boxShadow: '0 6px 20px rgba(204,58,58,0.08)' } : {}),
     }}>
       {/* COLLAPSED HEADER ROW */}
@@ -280,7 +310,7 @@ function EmployeeCard({ user, assets, tickets, openCount, expanded, onToggle, on
 
         {/* Identity column */}
         <div style={{ minWidth: 200, flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 700, fontSize: 14, color: NAVY }}>{user.name}</span>
             <span style={{
               background: '#f3f4f6',
@@ -289,6 +319,15 @@ function EmployeeCard({ user, assets, tickets, openCount, expanded, onToggle, on
             }}>
               {user.id}
             </span>
+            {isInactive && (
+              <span style={{
+                background: '#e5e7eb', color: '#374151',
+                padding: '2px 8px', borderRadius: 4,
+                fontSize: 10, fontWeight: 800, letterSpacing: '0.4px',
+              }}>
+                INACTIVE
+              </span>
+            )}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
             {[user.designation, user.dept].filter(Boolean).join(' · ') || '—'}
@@ -475,6 +514,40 @@ function EmployeeCard({ user, assets, tickets, openCount, expanded, onToggle, on
               )}
             </div>
           )}
+
+          {/* ACCOUNT ACTIONS */}
+          <div style={{ marginTop: 24 }}>
+            <SectionHeader icon="manage_accounts" label="Account Actions" count={null} />
+            {isProtected ? (
+              <div style={{
+                background: 'var(--white)', border: '1px solid var(--slate)', borderRadius: 8,
+                padding: '12px 16px', fontSize: 12, color: 'var(--text-muted)',
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: NAVY }}>shield</span>
+                Protected admin account — cannot be deactivated from the UI.
+              </div>
+            ) : (
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleStatus(); }}
+                style={{
+                  padding: '10px 18px', borderRadius: 8,
+                  fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  border: 'none', color: '#fff',
+                  background: isInactive ? GREEN : AMBER,
+                  boxShadow: isInactive
+                    ? '0 4px 12px rgba(22,163,74,0.25)'
+                    : '0 4px 12px rgba(245,158,11,0.25)',
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                  {isInactive ? 'check_circle' : 'block'}
+                </span>
+                {isInactive ? 'Set Active' : 'Set Inactive'}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -661,9 +734,11 @@ function SectionHeader({ icon, label, count }) {
       <span style={{ fontSize: 12, fontWeight: 800, color: NAVY, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
         {label}
       </span>
-      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>
-        ({count})
-      </span>
+      {count !== null && count !== undefined && (
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>
+          ({count})
+        </span>
+      )}
     </div>
   );
 }

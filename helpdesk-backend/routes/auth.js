@@ -87,6 +87,23 @@ async function gateLoginAccess(email) {
   const clean = String(email || '').trim().toLowerCase();
   if (!clean) return { allowed: false, reason: 'NOT_REGISTERED' };
 
+  // 0. Inactive override — admin can locally block any user (including
+  //    NxtPeople users) by setting status='inactive'. Checked before all
+  //    bypasses so even admin-list emails get blocked if explicitly
+  //    deactivated… EXCEPT the admin protection happens in the PATCH
+  //    endpoint, which refuses to deactivate ADMIN_EMAILS entries.
+  try {
+    const inactive = await pool.query(
+      "SELECT 1 FROM users WHERE LOWER(email) = $1 AND status = 'inactive' LIMIT 1",
+      [clean]
+    );
+    if (inactive.rows.length > 0) {
+      return { allowed: false, reason: 'ACCOUNT_INACTIVE' };
+    }
+  } catch (err) {
+    console.error('[auth] inactive lookup failed:', err.message);
+  }
+
   // 1. Admin bypass
   if (isAdmin(clean)) {
     return { allowed: true, via: 'admin' };
