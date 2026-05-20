@@ -783,7 +783,7 @@ export default function AssetMaster() {
                   <FormField label="Owning Company">
                     <select className="form-select-light" value={form.ownedByDivision} onChange={e => handleChange('ownedByDivision', e.target.value)}>
                       <option value="">Select Company</option>
-                      {['antlabs', 'white&co', 'Yantra24/7', 'Profimax'].map(d => <option key={d} value={d}>{d}</option>)}
+                      {organizations.map(o => <option key={o.id ?? o.name} value={o.name}>{o.name}</option>)}
                     </select>
                   </FormField>
                 )}
