@@ -35,14 +35,16 @@ const CATEGORY_ICON = {
   Printer:  'print',
 };
 
-/* â”€â”€ PLACEHOLDER MY ASSETS (real data wired in next phase) â”€â”€ */
-const PLACEHOLDER_ASSETS = [
-  { id: 'AST-9921', name: 'MacBook Pro 16" (M2 Max)',  icon: 'laptop' },
-  { id: 'AST-8342', name: 'iPhone 14 Pro (Corporate)', icon: 'smartphone' },
-  { id: 'AST-1104', name: 'Dell UltraSharp 27" 4K',    icon: 'monitor' },
-];
+/* Map asset type to a Material Icon name (for the My Assets row) */
+function assetIconFor(type) {
+  const map = { Laptop: 'laptop', Desktop: 'desktop_windows', Monitor: 'monitor',
+                Mobile: 'smartphone', Phone: 'smartphone', Tablet: 'tablet',
+                Keyboard: 'keyboard', Mouse: 'mouse', Printer: 'print',
+                Headset: 'headset_mic' };
+  return map[type] || 'devices_other';
+}
 
-/* â”€â”€ TIME-AGO HELPER â”€â”€ */
+/* TIME-AGO HELPER */
 function timeAgo(rawDate) {
   if (!rawDate) return '';
   // rawDate from AppContext is already formatted "DD MMM YYYY, HH:mm"
@@ -61,14 +63,14 @@ export default function EmployeeDashboard() {
   const { currentUser, getMyTickets, fetchMyAssets } = useApp();
   const navigate = useNavigate();
   const mine = getMyTickets();
-  const [realAssetCount, setRealAssetCount] = useState(null);
+  const [myAssets, setMyAssets] = useState([]);
 
-  // Fetch real asset count (falls back to placeholder count if empty)
+  // Fetch real assets allocated to this user
   useEffect(() => {
     let cancelled = false;
     fetchMyAssets().then(rows => {
       if (cancelled) return;
-      setRealAssetCount((rows && rows.length > 0) ? rows.length : PLACEHOLDER_ASSETS.length);
+      setMyAssets(Array.isArray(rows) ? rows : []);
     });
     return () => { cancelled = true; };
   }, []);
@@ -81,7 +83,7 @@ export default function EmployeeDashboard() {
     return msgs.length > 0 && msgs[msgs.length - 1].from === 'admin';
   }).length;
 
-  const myAssetsCount = realAssetCount ?? PLACEHOLDER_ASSETS.length;
+  const myAssetsCount = myAssets.length;
 
   // Greeting based on hour
   const hour = new Date().getHours();
@@ -194,17 +196,26 @@ export default function EmployeeDashboard() {
           )}
         </Section>
 
-        {/* My Assets - placeholder data */}
+        {/* My Assets — real data only */}
         <Section
           title="My Assets"
           icon="devices"
           actionLabel="View all"
-          onAction={() => {}}
-          subtitle="Showing placeholder data"
+          onAction={() => navigate('/assets')}
         >
-          {PLACEHOLDER_ASSETS.map(a => (
-            <AssetRow key={a.id} asset={a} />
-          ))}
+          {myAssets.length === 0 ? (
+            <div style={{ padding: '20px 8px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              No assets assigned yet.
+              <div style={{ fontSize: 11, marginTop: 4 }}>Devices the admin assigns to you will show up here.</div>
+            </div>
+          ) : (
+            myAssets.slice(0, 4).map(a => (
+              <AssetRow
+                key={a.id}
+                asset={{ id: a.id, name: a.name, icon: assetIconFor(a.type) }}
+              />
+            ))
+          )}
         </Section>
       </div>
     </div>

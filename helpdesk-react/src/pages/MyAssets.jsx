@@ -55,101 +55,6 @@ function mapDbAsset(row, idx) {
   };
 }
 
-/*
-  PLACEHOLDER DATA - shape designed for future backend wiring.
-  Real endpoint will be: GET /api/assets/me
-  Expected fields below align with `assets` + `asset_allocations` tables.
-*/
-const PLACEHOLDER_ASSETS = [
-  {
-    id: 'AST-2022-094',
-    name: 'Dell Latitude 5520',
-    type: 'Laptop',
-    icon: 'laptop',
-    primary: true,
-    serialNumber: 'DL55-9012',
-    assignedDate: 'Oct 15, 2022',
-    warranty: 'Valid till Dec 2025',
-    warrantyStatus: 'valid',
-    condition: 'Good',
-    health: 98,
-    healthLabel: 'EXCELLENT',
-    healthColor: GREEN,
-    accentColor: RED,
-    typePillBg: RED,
-    iconBg: `linear-gradient(135deg, ${RED} 0%, #a82e2e 100%)`,
-    iconColor: '#fff',
-    specs: {
-      os: 'Windows 11 Pro',
-      processor: 'Intel Core i7-1185G7',
-      ram: '16GB DDR4',
-      storage: '512GB NVMe SSD',
-    },
-    purchase: {
-      from: 'Dell Tech Direct',
-      invoice: 'INV-29188',
-    },
-    serviceHistory: [
-      { date: 'Sep 10, 2023', issue: 'Battery replacement', status: 'resolved' },
-      { date: 'Aug 12, 2023', issue: 'Keyboard sticking', status: 'resolved' },
-    ],
-  },
-  {
-    id: 'AST-2023-112',
-    name: 'iPhone 14 Pro',
-    type: 'Mobile',
-    icon: 'smartphone',
-    primary: false,
-    serialNumber: 'IP14-4421',
-    assignedDate: 'Jan 10, 2023',
-    warranty: 'Expiring Soon',
-    warrantyStatus: 'expiring',
-    condition: 'Good',
-    health: 82,
-    healthLabel: 'FAIR',
-    healthColor: AMBER,
-    typePillBg: AMBER,
-    iconBg: '#fffbeb',
-    iconColor: AMBER,
-  },
-  {
-    id: 'AST-2022-401',
-    name: 'Dell UltraSharp 27"',
-    type: 'Monitor',
-    icon: 'monitor',
-    primary: false,
-    serialNumber: 'DU27-8891',
-    assignedDate: 'Oct 15, 2022',
-    warranty: 'Valid till Dec 2025',
-    warrantyStatus: 'valid',
-    condition: 'Good',
-    health: 100,
-    healthLabel: 'PERFECT',
-    healthColor: GREEN,
-    typePillBg: BLUE,
-    iconBg: '#f0f9ff',
-    iconColor: BLUE,
-  },
-  {
-    id: 'AST-2022-402',
-    name: 'Apple Magic Keyboard & Mouse',
-    type: 'Accessory',
-    icon: 'keyboard',
-    primary: false,
-    serialNumber: 'AMK-9901',
-    assignedDate: 'Oct 15, 2022',
-    warranty: 'Valid till Oct 2024',
-    warrantyStatus: 'valid',
-    condition: 'Good',
-    health: 95,
-    healthLabel: 'HEALTHY',
-    healthColor: GREEN,
-    typePillBg: '#9333ea',
-    iconBg: '#fdf4ff',
-    iconColor: '#9333ea',
-  },
-];
-
 const WARRANTY_BADGE = {
   valid:    { bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0', label: 'VALID' },
   expiring: { bg: '#fffbeb', color: '#d97706', border: '#fde68a', label: 'EXPIRING SOON' },
@@ -167,19 +72,12 @@ export default function MyAssets() {
   const { fetchMyAssets } = useApp();
   const [expanded, setExpanded] = useState({});
   const [assets, setAssets] = useState(null);     // null = loading, [] = empty, [...] = data
-  const [usingPlaceholder, setUsingPlaceholder] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     fetchMyAssets().then(rows => {
       if (cancelled) return;
-      if (rows && rows.length > 0) {
-        setAssets(rows.map(mapDbAsset));
-        setUsingPlaceholder(false);
-      } else {
-        setAssets(PLACEHOLDER_ASSETS);
-        setUsingPlaceholder(true);
-      }
+      setAssets((rows && rows.length > 0) ? rows.map(mapDbAsset) : []);
     });
     return () => { cancelled = true; };
   }, []);
@@ -192,6 +90,35 @@ export default function MyAssets() {
 
   if (assets === null) {
     return <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-muted)' }}>Loading assets...</div>;
+  }
+
+  // No assets assigned → empty state, no demo data
+  if (assets.length === 0) {
+    return (
+      <div style={{ animation: 'fadeIn 0.3s ease' }}>
+        <h1 style={{ fontSize: 27, fontWeight: 700, color: NAVY, letterSpacing: '-0.6px', fontFamily: 'DM Sans, sans-serif', marginBottom: 8 }}>
+          My Assets
+        </h1>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 32 }}>
+          0 devices assigned to you
+        </p>
+        <div style={{
+          padding: '60px 24px', textAlign: 'center',
+          background: 'var(--white)', borderRadius: 12,
+          border: '1px dashed var(--slate)',
+        }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 48, color: 'var(--text-muted)', opacity: 0.4, display: 'block', marginBottom: 12 }}>
+            devices_other
+          </span>
+          <div style={{ fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 6 }}>
+            No assets assigned yet
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 380, margin: '0 auto' }}>
+            When the admin assigns a device, laptop or accessory to you, it will show up here.
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const primary = assets.find(a => a.primary) || assets[0];
@@ -210,7 +137,6 @@ export default function MyAssets() {
           </h1>
           <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
             {assets.length} {assets.length === 1 ? 'device' : 'devices'} assigned to you
-            {usingPlaceholder && <span style={{ color: AMBER, marginLeft: 8 }}>(showing demo data - no real assets allocated yet)</span>}
           </p>
         </div>
       </div>
