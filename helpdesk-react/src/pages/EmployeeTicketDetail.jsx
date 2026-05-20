@@ -198,6 +198,35 @@ export default function EmployeeTicketDetail() {
             )}
           </SectionCard>
 
+          {/* Action Taken — shown when ticket is resolved/closed and a note exists */}
+          {['resolved', 'closed'].includes(t.status) && t.resolutionNote && (
+            <SectionCard style={{
+              borderLeft: '4px solid var(--success, #16a34a)',
+              background: 'rgba(22, 163, 74, 0.04)',
+            }}>
+              <SectionTitle icon="task_alt">Action Taken</SectionTitle>
+              <div style={{
+                fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6,
+                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                padding: '4px 0 8px',
+              }}>
+                {t.resolutionNote}
+              </div>
+              <div style={{
+                fontSize: 12, color: 'var(--text-muted)',
+                borderTop: '1px solid rgba(22,163,74,0.15)', paddingTop: 10, marginTop: 6,
+                display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 14, color: 'var(--success, #16a34a)' }}>
+                  check_circle
+                </span>
+                Resolved
+                {t.assignedTo && <> by <strong style={{ color: 'var(--text-primary)' }}>{t.assignedTo}</strong></>}
+                {t.resolvedAt && <> · {t.resolvedAt}</>}
+              </div>
+            </SectionCard>
+          )}
+
           {/* Updates and Communication */}
           <SectionCard>
             <SectionTitle icon="chat_bubble_outline">Updates and Communication</SectionTitle>
@@ -309,12 +338,13 @@ export default function EmployeeTicketDetail() {
 
 /* â”€â”€ COMPONENTS â”€â”€ */
 
-function SectionCard({ children }) {
+function SectionCard({ children, style }) {
   return (
     <div style={{
       background: 'var(--white)', borderRadius: 12,
       border: '1px solid var(--slate)', padding: 24,
       boxShadow: 'var(--shadow-sm)',
+      ...style,
     }}>
       {children}
     </div>

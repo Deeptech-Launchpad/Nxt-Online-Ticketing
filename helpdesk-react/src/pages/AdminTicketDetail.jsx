@@ -96,7 +96,12 @@ export default function AdminTicketDetail() {
   };
 
   const handleResolve = () => {
-    setResolution(t.id, resNote);
+    const note = resNote.trim();
+    if (!note) {
+      showToast('Please write a short note about the action you took.', 'error');
+      return;
+    }
+    setResolution(t.id, note);
     setStatus(t.id, 'closed');
     setCloseModal(false);
     setResNote('');
@@ -271,6 +276,35 @@ export default function AdminTicketDetail() {
               </div>
             )}
           </SectionCard>
+
+          {/* Action Taken — only shown when ticket is resolved/closed and a note exists */}
+          {['resolved', 'closed'].includes(t.status) && t.resolutionNote && (
+            <SectionCard style={{
+              borderLeft: '4px solid var(--success, #16a34a)',
+              background: 'rgba(22, 163, 74, 0.04)',
+            }}>
+              <SectionTitle icon="task_alt">Action Taken</SectionTitle>
+              <div style={{
+                fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.6,
+                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                padding: '4px 0 8px',
+              }}>
+                {t.resolutionNote}
+              </div>
+              <div style={{
+                fontSize: 12, color: 'var(--text-muted)',
+                borderTop: '1px solid rgba(22,163,74,0.15)', paddingTop: 10, marginTop: 6,
+                display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 14, color: 'var(--success, #16a34a)' }}>
+                  check_circle
+                </span>
+                Resolved
+                {t.assignedTo && <> by <strong style={{ color: 'var(--text-primary)' }}>{t.assignedTo}</strong></>}
+                {t.resolvedAt && <> · {t.resolvedAt}</>}
+              </div>
+            </SectionCard>
+          )}
 
           {/* Conversation */}
           <SectionCard>
@@ -494,11 +528,13 @@ export default function AdminTicketDetail() {
       >
         <div style={{ padding: '0 20px 20px 20px' }}>
           <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>
-            Write a short note about how you resolved this issue. The employee will see this note.
+            Describe the action you took to resolve this issue. The employee
+            will see this note when they view the ticket. <span style={{ color: 'var(--danger)', fontWeight: 700 }}>*</span>
           </p>
-          <textarea className="resolution-textarea" rows={3}
-            placeholder="Document resolution steps..."
+          <textarea className="resolution-textarea" rows={4}
+            placeholder="e.g. Replaced the laptop battery and reinstalled Windows updates. Verified the system boots and runs normally."
             value={resNote} onChange={e => setResNote(e.target.value)}
+            autoFocus
           />
         </div>
       </Modal>
@@ -526,12 +562,13 @@ function parseDevice(deviceStr) {
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ COMPONENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-function SectionCard({ children }) {
+function SectionCard({ children, style }) {
   return (
     <div style={{
       background: 'var(--white)', borderRadius: 12,
       border: '1px solid var(--slate)', padding: 24,
       boxShadow: 'var(--shadow-sm)',
+      ...style,
     }}>
       {children}
     </div>
