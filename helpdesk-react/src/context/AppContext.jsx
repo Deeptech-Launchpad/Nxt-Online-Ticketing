@@ -182,6 +182,17 @@ export function AppProvider({ children }) {
     }
   };
 
+  const fetchAllAssets = async () => {
+    try {
+      const res = await fetch(`${API}/assets`);
+      if (!res.ok) return [];
+      return await res.json();
+    } catch (err) {
+      console.error('fetchAllAssets failed:', err);
+      return [];
+    }
+  };
+
   /* ── EMPLOYEES (Admin) ───────────────────────────────────── */
 
   const fetchEmployees = async () => {
@@ -335,7 +346,7 @@ export function AppProvider({ children }) {
       login, logout, submitTicket,
       addMessage, setStatus, assignTicket, setResolution,
       getMyTickets, updatePriority, refreshTickets: fetchTickets,
-      fetchMyAssets, fetchAllAllocations,
+      fetchMyAssets, fetchAllAllocations, fetchAllAssets,
       fetchEmployees, addEmployee, setUserStatus, updateProfile,
       fetchNotifications, markNotifRead, markAllNotifRead,
     }}>

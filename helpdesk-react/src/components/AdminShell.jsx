@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
@@ -42,16 +42,93 @@ function SidebarIcon({ icon, label, active, onClick }) {
 }
 
 export function AdminShell({ children }) {
-  const { currentUser, logout, fetchNotifications } = useApp();
+  const { currentUser, logout, fetchNotifications, tickets, fetchEmployees, fetchAllAssets } = useApp();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [profileOpen, setProfileOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
+  const [allAssets, setAllAssets] = useState([]);
+  const searchInputRef = useRef(null);
+  const searchBoxRef = useRef(null);
 
   const initials = (currentUser?.name || 'A').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
   const isDark = theme === 'dark';
+
+  // Load users + assets once for the global search (tickets already in AppContext)
+  useEffect(() => {
+    fetchEmployees().then(d => setAllUsers(Array.isArray(d) ? d : []));
+    fetchAllAssets().then(d => setAllAssets(Array.isArray(d) ? d : []));
+  }, []);
+
+  // Close search dropdown when clicking outside the search box
+  useEffect(() => {
+    const onClick = (e) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target)) {
+        setSearchOpen(false);
+      }
+    };
+    if (searchOpen) document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [searchOpen]);
+
+  // Global hotkeys: Ctrl+K focuses the search bar, Esc closes it
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setSearchOpen(true);
+      } else if (e.key === 'Escape') {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Filter results — only run when there's a query of at least 2 chars
+  const searchResults = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (q.length < 2) return null;
+
+    const ticketHits = tickets.filter(t =>
+      (t.id           || '').toLowerCase().includes(q) ||
+      (t.subject      || '').toLowerCase().includes(q) ||
+      (t.employeeName || '').toLowerCase().includes(q) ||
+      (t.category     || '').toLowerCase().includes(q) ||
+      (t.status       || '').toLowerCase().includes(q)
+    ).slice(0, 5);
+
+    const userHits = allUsers.filter(u =>
+      (u.name  || '').toLowerCase().includes(q) ||
+      (u.id    || '').toLowerCase().includes(q) ||
+      (u.email || '').toLowerCase().includes(q) ||
+      (u.dept  || '').toLowerCase().includes(q)
+    ).slice(0, 5);
+
+    const assetHits = allAssets.filter(a =>
+      (a.id            || '').toLowerCase().includes(q) ||
+      (a.name          || '').toLowerCase().includes(q) ||
+      (a.serial_number || '').toLowerCase().includes(q) ||
+      (a.brand         || '').toLowerCase().includes(q) ||
+      (a.type          || '').toLowerCase().includes(q)
+    ).slice(0, 5);
+
+    return { ticketHits, userHits, assetHits,
+             total: ticketHits.length + userHits.length + assetHits.length };
+  }, [search, tickets, allUsers, allAssets]);
+
+  const handleResultClick = (type, idOrPath) => {
+    setSearch('');
+    setSearchOpen(false);
+    if (type === 'ticket')   navigate(`/admin/tickets/${idOrPath}`);
+    else if (type === 'user')  navigate('/admin/employees');
+    else if (type === 'asset') navigate('/admin/assets');
+  };
 
   // Poll admin notifications every 30s
   useEffect(() => {
@@ -115,29 +192,116 @@ export function AdminShell({ children }) {
           </span>
         </div>
 
-        {/* Search bar */}
-        <div style={{
-          flex: 1, maxWidth: 500, marginLeft: 24,
-          background: isDark ? '#161e2d' : '#F1F5F9',
-          border: '1px solid transparent', borderRadius: 12,
-          padding: '0 14px', height: 40,
-          display: 'flex', alignItems: 'center', gap: 10, cursor: 'text',
+        {/* Search bar — global jump-to search */}
+        <div ref={searchBoxRef} style={{
+          flex: 1, maxWidth: 500, marginLeft: 24, position: 'relative',
         }}>
-          <span className="material-symbols-outlined" style={{ color: isDark ? RED : '#94A3B8', fontSize: 20 }}>search</span>
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search tickets, users, assets..."
+          <div
+            onClick={() => { searchInputRef.current?.focus(); setSearchOpen(true); }}
             style={{
-              background: 'transparent', border: 'none', outline: 'none', flex: 1,
-              fontFamily: 'inherit', fontSize: 13, color: isDark ? '#fff' : '#0C0E10',
+              background: isDark ? '#161e2d' : '#F1F5F9',
+              border: '1px solid transparent', borderRadius: 12,
+              padding: '0 14px', height: 40,
+              display: 'flex', alignItems: 'center', gap: 10, cursor: 'text',
             }}
-          />
-          <kbd style={{
-            background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
-            border: `1px solid ${isDark ? '#283a50' : 'rgba(0,0,0,0.08)'}`,
-            borderRadius: 4, padding: '2px 6px',
-            fontSize: 10, fontWeight: 700, color: isDark ? '#94a3b8' : '#64748B',
-          }}>Ctrl+K</kbd>
+          >
+            <span className="material-symbols-outlined" style={{ color: isDark ? RED : '#94A3B8', fontSize: 20 }}>search</span>
+            <input
+              ref={searchInputRef}
+              value={search}
+              onChange={e => { setSearch(e.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+              placeholder="Search tickets, users, assets..."
+              style={{
+                background: 'transparent', border: 'none', outline: 'none', flex: 1,
+                fontFamily: 'inherit', fontSize: 13, color: isDark ? '#fff' : '#0C0E10',
+              }}
+            />
+            <kbd style={{
+              background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+              border: `1px solid ${isDark ? '#283a50' : 'rgba(0,0,0,0.08)'}`,
+              borderRadius: 4, padding: '2px 6px',
+              fontSize: 10, fontWeight: 700, color: isDark ? '#94a3b8' : '#64748B',
+            }}>Ctrl+K</kbd>
+          </div>
+
+          {/* Live results dropdown */}
+          {searchOpen && searchResults && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
+              background: isDark ? '#1a2636' : '#fff',
+              border: `1px solid ${isDark ? '#283a50' : 'rgba(0,0,0,0.08)'}`,
+              borderRadius: 12, boxShadow: '0 12px 32px rgba(0,0,0,0.15)',
+              maxHeight: 480, overflowY: 'auto', zIndex: 1000,
+            }}>
+              {searchResults.total === 0 ? (
+                <div style={{ padding: '24px', textAlign: 'center', fontSize: 13, color: isDark ? '#94a3b8' : '#64748B' }}>
+                  No results for <strong style={{ color: isDark ? '#fff' : NAVY }}>"{search}"</strong>
+                </div>
+              ) : (
+                <>
+                  {/* Tickets group */}
+                  {searchResults.ticketHits.length > 0 && (
+                    <ResultGroup label="Tickets" icon="confirmation_number" isDark={isDark}>
+                      {searchResults.ticketHits.map(t => (
+                        <ResultRow
+                          key={`t-${t.id}`}
+                          isDark={isDark}
+                          icon="confirmation_number"
+                          iconColor={RED}
+                          primary={`${t.id} — ${t.subject}`}
+                          secondary={`${t.employeeName || 'Unknown'} · ${t.category || 'General'} · ${t.status}`}
+                          onClick={() => handleResultClick('ticket', t.id)}
+                        />
+                      ))}
+                    </ResultGroup>
+                  )}
+                  {/* Employees group */}
+                  {searchResults.userHits.length > 0 && (
+                    <ResultGroup label="Employees" icon="person" isDark={isDark}>
+                      {searchResults.userHits.map(u => (
+                        <ResultRow
+                          key={`u-${u.id}`}
+                          isDark={isDark}
+                          icon="person"
+                          iconColor="#0EA5E9"
+                          primary={u.name || u.email}
+                          secondary={`${u.id} · ${u.email || '—'} · ${u.dept || '—'}`}
+                          onClick={() => handleResultClick('user', u.id)}
+                        />
+                      ))}
+                    </ResultGroup>
+                  )}
+                  {/* Assets group */}
+                  {searchResults.assetHits.length > 0 && (
+                    <ResultGroup label="Assets" icon="devices" isDark={isDark}>
+                      {searchResults.assetHits.map(a => (
+                        <ResultRow
+                          key={`a-${a.id}`}
+                          isDark={isDark}
+                          icon="devices"
+                          iconColor="#16a34a"
+                          primary={`${a.id} — ${a.name}`}
+                          secondary={`${a.brand || ''} ${a.type || ''} · SN ${a.serial_number || '—'}`}
+                          onClick={() => handleResultClick('asset', a.id)}
+                        />
+                      ))}
+                    </ResultGroup>
+                  )}
+                </>
+              )}
+              <div style={{
+                padding: '8px 14px', borderTop: `1px solid ${isDark ? '#283a50' : '#f3f4f6'}`,
+                fontSize: 10, color: isDark ? '#64748b' : '#94A3B8', textAlign: 'right',
+              }}>
+                Tip: press <kbd style={{
+                  background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
+                  border: `1px solid ${isDark ? '#283a50' : 'rgba(0,0,0,0.08)'}`,
+                  borderRadius: 3, padding: '1px 5px', fontSize: 10, fontWeight: 700,
+                }}>Esc</kbd> to close
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Dark mode toggle - marginLeft:auto pushes this + everything after to the right corner */}
@@ -258,4 +422,72 @@ function menuBtnStyle(isDark) {
     background: 'transparent', border: 'none',
     cursor: 'pointer', textAlign: 'left', fontFamily: 'DM Sans, sans-serif',
   };
+}
+
+/* ── Global-search dropdown helpers ─────────────────────────── */
+
+function ResultGroup({ label, icon, isDark, children }) {
+  return (
+    <div>
+      <div style={{
+        padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6,
+        background: isDark ? 'rgba(255,255,255,0.03)' : '#fafbfc',
+        borderBottom: `1px solid ${isDark ? '#283a50' : '#f3f4f6'}`,
+      }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 14, color: isDark ? '#94a3b8' : '#94A3B8' }}>
+          {icon}
+        </span>
+        <span style={{
+          fontSize: 10, fontWeight: 800, color: isDark ? '#94a3b8' : '#64748B',
+          textTransform: 'uppercase', letterSpacing: '0.7px',
+        }}>{label}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ResultRow({ icon, iconColor, primary, secondary, onClick, isDark }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        padding: '10px 14px', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 12,
+        background: hover ? (isDark ? 'rgba(255,255,255,0.04)' : '#f8fafc') : 'transparent',
+        borderBottom: `1px solid ${isDark ? '#1f2d40' : '#f3f4f6'}`,
+        transition: 'background 0.12s',
+      }}
+    >
+      <div style={{
+        width: 30, height: 30, borderRadius: 8,
+        background: `${iconColor}1a`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+      }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 16, color: iconColor }}>
+          {icon}
+        </span>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 13, fontWeight: 600, color: isDark ? '#fff' : '#0C0E10',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {primary}
+        </div>
+        <div style={{
+          fontSize: 11, color: isDark ? '#94a3b8' : '#64748B', marginTop: 2,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {secondary}
+        </div>
+      </div>
+      <span className="material-symbols-outlined" style={{ fontSize: 16, color: isDark ? '#94a3b8' : '#94A3B8', flexShrink: 0 }}>
+        arrow_forward
+      </span>
+    </div>
+  );
 }
