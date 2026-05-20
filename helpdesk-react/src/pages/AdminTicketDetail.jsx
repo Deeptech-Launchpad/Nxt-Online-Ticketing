@@ -26,7 +26,7 @@ const STATUS_OPTS = [
 export default function AdminTicketDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { tickets, currentUser, addMessage, setStatus, setResolution, updatePriority } = useApp();
+  const { tickets, currentUser, addMessage, setStatus, setResolution, updatePriority, refreshTickets } = useApp();
 
   const [reply, setReply] = useState('');
   const [closeModal, setCloseModal] = useState(false);
@@ -34,6 +34,13 @@ export default function AdminTicketDetail() {
   const [privateNotes, setPrivateNotes] = useState('');
 
   const t = tickets.find(x => x.id === id);
+
+  // Always refetch when opening a ticket so the conversation is fresh —
+  // notification poller does background polling, but the first view should
+  // never show stale data.
+  useEffect(() => {
+    refreshTickets();
+  }, [id]);
 
   // Load private admin notes from localStorage (stored per ticket id, not yet in DB)
   useEffect(() => {

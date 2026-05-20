@@ -42,7 +42,7 @@ function SidebarIcon({ icon, label, active, onClick }) {
 }
 
 export function EmployeeShell({ children }) {
-  const { currentUser, logout, fetchNotifications } = useApp();
+  const { currentUser, logout, fetchNotifications, refreshTickets } = useApp();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -52,12 +52,24 @@ export function EmployeeShell({ children }) {
   const initials = (currentUser?.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
   const isDark = theme === 'dark';
 
-  // Poll for unread notifications every 30s
+  // Poll for unread notifications every 30s. When a NEW ticket-related
+  // notification arrives (admin reply, status change), also refresh the
+  // tickets list so the conversation updates without an F5.
   useEffect(() => {
     let cancelled = false;
+    let lastTicketNotifId = -1;   // -1 = not yet initialized
     const refresh = async () => {
       const items = await fetchNotifications();
-      if (!cancelled) setUnreadCount(items.filter(n => !n.is_read).length);
+      if (cancelled) return;
+      setUnreadCount(items.filter(n => !n.is_read).length);
+      const ticketNotifs = items.filter(n => n.type === 'ticket');
+      const maxId = ticketNotifs.reduce((m, n) => (n.id > m ? n.id : m), 0);
+      if (lastTicketNotifId === -1) {
+        lastTicketNotifId = maxId;          // first run — baseline only
+      } else if (maxId > lastTicketNotifId) {
+        lastTicketNotifId = maxId;
+        refreshTickets();                   // new ticket activity → refetch
+      }
     };
     refresh();
     const id = setInterval(refresh, 30000);

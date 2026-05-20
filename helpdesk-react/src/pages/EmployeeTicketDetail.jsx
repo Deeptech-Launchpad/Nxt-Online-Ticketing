@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { showToast } from '../components/Toast';
@@ -26,8 +26,13 @@ const STATUS_PILL = {
 export default function EmployeeTicketDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { tickets, currentUser, addMessage, setStatus } = useApp();
+  const { tickets, currentUser, addMessage, setStatus, refreshTickets } = useApp();
   const [reply, setReply] = useState('');
+
+  // Always refetch when opening — first view should never show stale messages.
+  useEffect(() => {
+    refreshTickets();
+  }, [id]);
 
   const t = tickets.find(x => x.id === id);
   if (!t) {

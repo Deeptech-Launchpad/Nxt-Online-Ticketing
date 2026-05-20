@@ -56,7 +56,7 @@ function SidebarIcon({ icon, label, active, onClick, badge }) {
 }
 
 export function AdminShell({ children }) {
-  const { currentUser, logout, fetchNotifications, tickets, fetchEmployees, fetchAllAssets } = useApp();
+  const { currentUser, logout, fetchNotifications, refreshTickets, tickets, fetchEmployees, fetchAllAssets } = useApp();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -151,12 +151,25 @@ export function AdminShell({ children }) {
     else if (type === 'asset') navigate('/admin/assets');
   };
 
-  // Poll admin notifications every 30s
+  // Poll admin notifications every 30s. When a NEW ticket-related notification
+  // appears (new ticket, employee reply, status change), also refresh the
+  // tickets list so the conversation / status / count badge update without
+  // the admin having to F5.
   useEffect(() => {
     let cancelled = false;
+    let lastTicketNotifId = -1;   // -1 = not yet initialized
     const refresh = async () => {
       const items = await fetchNotifications();
-      if (!cancelled) setUnreadCount(items.filter(n => !n.is_read).length);
+      if (cancelled) return;
+      setUnreadCount(items.filter(n => !n.is_read).length);
+      const ticketNotifs = items.filter(n => n.type === 'ticket');
+      const maxId = ticketNotifs.reduce((m, n) => (n.id > m ? n.id : m), 0);
+      if (lastTicketNotifId === -1) {
+        lastTicketNotifId = maxId;          // first run — just baseline, no refresh
+      } else if (maxId > lastTicketNotifId) {
+        lastTicketNotifId = maxId;
+        refreshTickets();                   // new ticket activity → refetch
+      }
     };
     refresh();
     const id = setInterval(refresh, 30000);
