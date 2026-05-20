@@ -137,7 +137,7 @@ export function AdminShell({ children }) {
             border: `1px solid ${isDark ? '#283a50' : 'rgba(0,0,0,0.08)'}`,
             borderRadius: 4, padding: '2px 6px',
             fontSize: 10, fontWeight: 700, color: isDark ? '#94a3b8' : '#64748B',
-          }}>âŒ˜K</kbd>
+          }}>Ctrl+K</kbd>
         </div>
 
         {/* Dark mode toggle - marginLeft:auto pushes this + everything after to the right corner */}
