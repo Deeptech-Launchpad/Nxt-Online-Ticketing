@@ -9,8 +9,9 @@ const HEADER_H = 72;
 const NAVY = '#02172E';
 const RED  = '#CC3A3A';
 
-function SidebarIcon({ icon, label, active, onClick }) {
+function SidebarIcon({ icon, label, active, onClick, badge }) {
   const [hover, setHover] = useState(false);
+  const showBadge = typeof badge === 'number' && badge > 0;
   return (
     <div
       onClick={onClick}
@@ -27,6 +28,19 @@ function SidebarIcon({ icon, label, active, onClick }) {
       }}
     >
       <span className="material-symbols-outlined" style={{ fontSize: 24 }}>{icon}</span>
+      {showBadge && (
+        <span style={{
+          position: 'absolute', top: 2, right: 2,
+          background: RED, color: '#fff',
+          minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9,
+          border: `2px solid ${NAVY}`,
+          fontSize: 10, fontWeight: 800, lineHeight: 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+        }}>
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
       {hover && (
         <div style={{
           position: 'absolute', left: 58, top: '50%', transform: 'translateY(-50%)',
@@ -57,6 +71,13 @@ export function AdminShell({ children }) {
 
   const initials = (currentUser?.name || 'A').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
   const isDark = theme === 'dark';
+
+  // Sidebar Tickets badge — count of pending tickets (open + reopened only).
+  // In-progress tickets are excluded because they're already being worked on.
+  const pendingTicketCount = useMemo(
+    () => tickets.filter(t => t.status === 'open' || t.status === 'reopened').length,
+    [tickets]
+  );
 
   // Load users + assets once for the global search (tickets already in AppContext)
   useEffect(() => {
@@ -165,7 +186,7 @@ export function AdminShell({ children }) {
         boxShadow: '4px 0 24px rgba(0,0,0,0.1)',
       }}>
         <SidebarIcon icon="dashboard"            label="Dashboard"  active={isActive('/admin')}                                       onClick={() => go('/admin')} />
-        <SidebarIcon icon="confirmation_number"  label="Tickets"    active={isActive('/admin/tickets')}                               onClick={() => go('/admin/tickets')} />
+        <SidebarIcon icon="confirmation_number"  label="Tickets"    active={isActive('/admin/tickets')}                               onClick={() => go('/admin/tickets')} badge={pendingTicketCount} />
         <SidebarIcon icon="people"               label="Employees"  active={isActive('/admin/employees')}                             onClick={() => go('/admin/employees')} />
         <SidebarIcon icon="devices"              label="Assets"     active={isActive('/admin/assets')}                                onClick={() => go('/admin/assets')} />
         <SidebarIcon icon="bar_chart"            label="Reports"    active={isActive('/admin/reports')}                               onClick={() => go('/admin/reports')} />
