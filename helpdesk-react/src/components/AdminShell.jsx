@@ -146,9 +146,15 @@ export function AdminShell({ children }) {
   const handleResultClick = (type, idOrPath) => {
     setSearch('');
     setSearchOpen(false);
-    if (type === 'ticket')   navigate(`/admin/tickets/${idOrPath}`);
-    else if (type === 'user')  navigate('/admin/employees');
-    else if (type === 'asset') navigate('/admin/assets');
+    if (type === 'ticket') {
+      navigate(`/admin/tickets/${idOrPath}`);
+    } else if (type === 'user') {
+      // ?focus=<id> tells AdminEmployees which row to expand + scroll to
+      navigate(`/admin/employees?focus=${encodeURIComponent(idOrPath)}`);
+    } else if (type === 'asset') {
+      // ?focus=<id> for the Asset Master to pre-filter (or scroll)
+      navigate(`/admin/assets?focus=${encodeURIComponent(idOrPath)}`);
+    }
   };
 
   // Poll admin notifications every 30s. When a NEW ticket-related notification

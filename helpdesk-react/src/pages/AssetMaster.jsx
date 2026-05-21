@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 const DIVISIONS = ['Guntur -AndhraPradesh', 'RS Puram Coimbatore', 'Saibaba Colony-Coimbatore', 'Thudiyalur-coimbatore', 'WFH'];
 const ASSET_TYPES = ['Laptop', 'Desktop', 'Printer', 'Networking', 'Monitor', 'UPS', 'Phone', 'Other'];
@@ -244,7 +245,17 @@ export default function AssetMaster() {
     else setSelectedIds([]);
   };
 
-  const [search, setSearch] = useState('');
+  // ?focus=<assetId> from global search → pre-populate the search box so
+  // the matching asset row is filtered + visible at the top of the table.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusAsset = searchParams.get('focus');
+  const [search, setSearch] = useState(focusAsset || '');
+  useEffect(() => {
+    if (focusAsset) {
+      setSearch(focusAsset);
+      setSearchParams({}, { replace: true });   // clear the URL param after applying
+    }
+  }, [focusAsset]);
   const [filterDivision, setFilterDivision] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterOrg, setFilterOrg] = useState('all');

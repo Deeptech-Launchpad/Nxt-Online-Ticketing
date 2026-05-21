@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { showToast } from '../components/Toast';
 
@@ -66,12 +66,16 @@ const ADMIN_PROTECTED_EMAILS = new Set([
 export default function AdminEmployees() {
   const { tickets, fetchEmployees, fetchAllAllocations, addEmployee, setUserStatus, triggerZohoSync } = useApp();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusId = searchParams.get('focus');
+  const rowRefs = useRef({});             // { [userId]: HTMLDivElement } for scrollIntoView
   const [users, setUsers] = useState([]);
   const [allocations, setAllocations] = useState([]);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState({});       // { [userId]: true }
   const [modalOpen, setModalOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [highlightId, setHighlightId] = useState(null);  // briefly tint the focused row
 
   /* Initial load + refresh */
   const reload = async () => {
@@ -91,6 +95,28 @@ export default function AdminEmployees() {
     setAllocations(Array.isArray(a) ? a : []);
   };
   useEffect(() => { reload(); }, []);
+
+  /* ?focus=<userId> in the URL — admin came in from a global-search click.
+     Auto-expand that user's row, scroll it into view, and briefly highlight
+     it so the admin sees where they landed. Runs once users are loaded. */
+  useEffect(() => {
+    if (!focusId || users.length === 0) return;
+    const target = users.find(u => u.id === focusId);
+    if (!target) return;
+
+    setExpanded(prev => ({ ...prev, [focusId]: true }));
+    setHighlightId(focusId);
+    // Scroll after the row has rendered
+    setTimeout(() => {
+      const el = rowRefs.current[focusId];
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+    // Fade highlight away after 2.5s
+    const t = setTimeout(() => setHighlightId(null), 2500);
+    // Clear the URL param so the highlight doesn't re-trigger on subsequent renders
+    setSearchParams({}, { replace: true });
+    return () => clearTimeout(t);
+  }, [focusId, users]);
 
   /* Manual sync from Zoho People — admin clicks the button */
   const handleZohoSync = async () => {
@@ -291,6 +317,7 @@ export default function AdminEmployees() {
             const userTickets = ticketsForUser(u);
             const isOpen = !!expanded[u.id];
             const isProtected = ADMIN_PROTECTED_EMAILS.has((u.email || '').trim().toLowerCase());
+            const isHighlighted = highlightId === u.id;
             return (
               <EmployeeCard
                 key={u.id}
@@ -300,6 +327,8 @@ export default function AdminEmployees() {
                 openCount={openCountFor(u)}
                 expanded={isOpen}
                 isProtected={isProtected}
+                isHighlighted={isHighlighted}
+                rowRef={(el) => { if (el) rowRefs.current[u.id] = el; }}
                 onToggle={() => setExpanded(prev => ({ ...prev, [u.id]: !prev[u.id] }))}
                 onTicketClick={(tid) => navigate(`/admin/tickets/${tid}`)}
                 onToggleStatus={async () => {
@@ -349,17 +378,20 @@ export default function AdminEmployees() {
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ EMPLOYEE CARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-function EmployeeCard({ user, assets, tickets, openCount, expanded, isProtected, onToggle, onTicketClick, onToggleStatus }) {
+function EmployeeCard({ user, assets, tickets, openCount, expanded, isProtected, isHighlighted, rowRef, onToggle, onTicketClick, onToggleStatus }) {
   const initials = user.avatar || (user.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
   const isInactive = user.status === 'inactive';
 
   return (
-    <div style={{
+    <div ref={rowRef} style={{
       background: 'var(--white)', borderRadius: 12,
       border: '1px solid var(--slate)', overflow: 'hidden',
-      transition: 'all 0.18s',
+      transition: 'all 0.5s ease',
       opacity: isInactive ? 0.7 : 1,
-      ...(expanded ? { borderColor: RED, boxShadow: '0 6px 20px rgba(204,58,58,0.08)' } : {}),
+      ...(isHighlighted ? {
+        borderColor: RED,
+        boxShadow: `0 0 0 3px rgba(204,58,58,0.25), 0 12px 28px rgba(204,58,58,0.15)`,
+      } : expanded ? { borderColor: RED, boxShadow: '0 6px 20px rgba(204,58,58,0.08)' } : {}),
     }}>
       {/* COLLAPSED HEADER ROW */}
       <div
