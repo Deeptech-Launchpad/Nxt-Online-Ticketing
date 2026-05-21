@@ -64,13 +64,14 @@ const ADMIN_PROTECTED_EMAILS = new Set([
 ]);
 
 export default function AdminEmployees() {
-  const { tickets, fetchEmployees, fetchAllAllocations, addEmployee, setUserStatus } = useApp();
+  const { tickets, fetchEmployees, fetchAllAllocations, addEmployee, setUserStatus, triggerZohoSync } = useApp();
   const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [allocations, setAllocations] = useState([]);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState({});       // { [userId]: true }
   const [modalOpen, setModalOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   /* Initial load + refresh */
   const reload = async () => {
@@ -80,6 +81,44 @@ export default function AdminEmployees() {
     setAllocations(Array.isArray(a) ? a : []);
   };
   useEffect(() => { reload(); }, []);
+
+  /* Manual sync from Zoho People — admin clicks the button */
+  const handleZohoSync = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    const result = await triggerZohoSync();
+    setSyncing(false);
+    if (result.ok) {
+      showToast(
+        `Zoho sync done — ${result.total} employees (${result.inserted} new, ${result.updated} updated)`,
+        'success'
+      );
+      await reload();
+    } else {
+      showToast(`Zoho sync failed: ${result.error || 'unknown error'}`, 'error');
+    }
+  };
+
+  /* Most recent last_synced_at across the user list — for the "Last synced X ago" hint */
+  const lastSyncedAt = useMemo(() => {
+    let max = null;
+    for (const u of users) {
+      if (u.last_synced_at) {
+        const t = new Date(u.last_synced_at).getTime();
+        if (!max || t > max) max = t;
+      }
+    }
+    return max;
+  }, [users]);
+
+  const relSyncedAgo = (ms) => {
+    if (!ms) return null;
+    const diff = Math.floor((Date.now() - ms) / 1000);
+    if (diff < 60)        return `${diff}s ago`;
+    if (diff < 3600)      return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400)     return `${Math.floor(diff / 3600)}h ago`;
+    return new Date(ms).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  };
 
   /* â”€â”€ Group: assets per employee email (case-insensitive) â”€â”€ */
   const assetsByEmail = useMemo(() => {
@@ -173,21 +212,44 @@ export default function AdminEmployees() {
           </h1>
           <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 0' }}>
             {filteredUsers.length} of {users.length} employees
+            {lastSyncedAt && (
+              <> · last Zoho sync <strong style={{ color: NAVY }}>{relSyncedAgo(lastSyncedAt)}</strong></>
+            )}
           </p>
         </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            background: RED, color: '#fff', border: 'none',
-            padding: '11px 18px', borderRadius: 10,
-            fontSize: 13, fontWeight: 700, cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(204,58,58,0.25)',
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_add</span>
-          Add Employee
-        </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={handleZohoSync}
+            disabled={syncing}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'var(--white)', color: NAVY,
+              border: '1px solid var(--slate)',
+              padding: '11px 18px', borderRadius: 10,
+              fontSize: 13, fontWeight: 700,
+              cursor: syncing ? 'not-allowed' : 'pointer',
+              opacity: syncing ? 0.6 : 1,
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 18, animation: syncing ? 'spin 1s linear infinite' : 'none' }}>
+              sync
+            </span>
+            {syncing ? 'Syncing...' : 'Sync from Zoho'}
+          </button>
+          <button
+            onClick={() => setModalOpen(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: RED, color: '#fff', border: 'none',
+              padding: '11px 18px', borderRadius: 10,
+              fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(204,58,58,0.25)',
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_add</span>
+            Add Employee
+          </button>
+        </div>
       </div>
 
       {/* SEARCH BAR */}
@@ -328,6 +390,7 @@ function EmployeeCard({ user, assets, tickets, openCount, expanded, isProtected,
                 INACTIVE
               </span>
             )}
+            <SourceBadge source={user.source} />
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
             {[user.designation, user.dept].filter(Boolean).join(' · ') || '—'}
@@ -757,6 +820,25 @@ function Pill({ color, bg, text }) {
       fontSize: 10, fontWeight: 700, letterSpacing: '0.3px',
     }}>
       {text}
+    </span>
+  );
+}
+
+function SourceBadge({ source }) {
+  const map = {
+    zoho:      { bg: '#fffbeb', color: '#92400e', label: 'ZOHO' },
+    nxtpeople: { bg: '#f0fdf4', color: '#16a34a', label: 'NXTPEOPLE' },
+    manual:    { bg: '#eff6ff', color: '#1d4ed8', label: 'LOCAL' },
+  };
+  const cfg = map[source];
+  if (!cfg) return null;
+  return (
+    <span style={{
+      background: cfg.bg, color: cfg.color,
+      padding: '2px 6px', borderRadius: 4,
+      fontSize: 9, fontWeight: 800, letterSpacing: '0.4px',
+    }}>
+      {cfg.label}
     </span>
   );
 }

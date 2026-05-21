@@ -38,6 +38,17 @@ app.get('/', (req, res) => {
   res.json({ message: '✅ AltiusNXT Helpdesk Backend is running' });
 });
 
+// ── Zoho directory: manual sync trigger (admin "Sync Now" button) ──
+app.post('/api/zoho/sync', async (req, res) => {
+  try {
+    const { syncZohoEmployees } = require('./utils/zoho');
+    const result = await syncZohoEmployees();
+    res.status(result.ok ? 200 : 500).json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ── Auto-create tables on startup ───────────────────────────
 async function initDatabase() {
   try {
@@ -280,6 +291,14 @@ async function initDatabase() {
       UPDATE users SET status = 'active' WHERE status IS NULL;
     `);
 
+    // ── Zoho People directory sync extras ──
+    //   photo_url      = Zoho employee photo (if exposed by your form)
+    //   last_synced_at = when this row was last refreshed from Zoho
+    await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS photo_url      VARCHAR(500);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_synced_at TIMESTAMP;
+    `);
+
     // Notifications table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS notifications (
@@ -402,4 +421,22 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {
   console.log(`🚀 Backend server running at http://localhost:${PORT}`);
   await initDatabase();
+
+  // ── Zoho People directory sync — runs once on startup, then hourly ──
+  // Wrapped so a Zoho outage or misconfig can never crash the backend.
+  // If env vars aren't set, helper just no-ops with a warning.
+  const { isConfigured: zohoConfigured, syncZohoEmployees } = require('./utils/zoho');
+  if (zohoConfigured()) {
+    setImmediate(async () => {
+      try { await syncZohoEmployees(); }
+      catch (e) { console.error('[zoho] initial sync error:', e.message); }
+    });
+    setInterval(async () => {
+      try { await syncZohoEmployees(); }
+      catch (e) { console.error('[zoho] hourly sync error:', e.message); }
+    }, 60 * 60 * 1000); // 1 hour
+    console.log('🔁 Zoho People sync scheduled (every 1 hour)');
+  } else {
+    console.warn('⚠️  ZOHO_* env vars not set — Zoho directory sync disabled');
+  }
 });

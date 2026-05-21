@@ -59,6 +59,30 @@ async function ensureUserRow(email, source = 'nxtpeople') {
   const effectiveSource = isAdmin(cleanEmail) ? 'manual' : source;
 
   try {
+    // If a row already exists for this email (e.g. seeded earlier from Zoho
+    // with a Zoho EmployeeID as the primary key) we DON'T create a duplicate.
+    // Instead we keep the existing row and just upgrade its source to mark
+    // it as now-active via NxtPeople/manual. The Zoho EmployeeID stays as id.
+    const existing = await pool.query(
+      'SELECT id, source FROM users WHERE LOWER(email) = $1 LIMIT 1',
+      [cleanEmail]
+    );
+    if (existing.rows.length > 0) {
+      const cur = existing.rows[0];
+      // Only "upgrade" from zoho/auto → nxtpeople/manual; never downgrade
+      const shouldUpgrade =
+        (cur.source === 'zoho' || cur.source === 'auto' || cur.source === null)
+        && effectiveSource !== cur.source;
+      if (shouldUpgrade) {
+        await pool.query(
+          'UPDATE users SET source = $1, role = $2 WHERE id = $3',
+          [effectiveSource, role, cur.id]
+        );
+      }
+      return;
+    }
+
+    // No existing row — insert a new one keyed by email
     await pool.query(`
       INSERT INTO users (id, name, email, role, avatar, source)
       VALUES ($1, $2, $3, $4, $5, $6)

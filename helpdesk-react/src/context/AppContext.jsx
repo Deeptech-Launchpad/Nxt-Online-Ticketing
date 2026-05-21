@@ -221,6 +221,16 @@ export function AppProvider({ children }) {
     }
   };
 
+  const triggerZohoSync = async () => {
+    try {
+      const res = await fetch(`${API}/zoho/sync`, { method: 'POST' });
+      const data = await res.json();
+      return data;   // { ok, total, inserted, updated, touched, skipped }
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  };
+
   const setUserStatus = async (userId, status) => {
     try {
       const res = await fetch(`${API}/users/${encodeURIComponent(userId)}/status`, {
@@ -347,7 +357,7 @@ export function AppProvider({ children }) {
       addMessage, setStatus, assignTicket, setResolution,
       getMyTickets, updatePriority, refreshTickets: fetchTickets,
       fetchMyAssets, fetchAllAllocations, fetchAllAssets,
-      fetchEmployees, addEmployee, setUserStatus, updateProfile,
+      fetchEmployees, addEmployee, setUserStatus, triggerZohoSync, updateProfile,
       fetchNotifications, markNotifRead, markAllNotifRead,
     }}>
       {children}
