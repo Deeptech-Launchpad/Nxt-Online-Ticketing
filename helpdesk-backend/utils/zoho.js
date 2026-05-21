@@ -156,6 +156,27 @@ function pick(rec, ...keys) {
 }
 
 /**
+ * Decide if a Zoho employee record represents an *active* employee
+ * (still working at the company). Tolerant to the various status field
+ * names and values Zoho People accounts use.
+ *
+ * Treat as INACTIVE if any of these status fields contains a word like
+ * "resigned", "terminated", "inactive", "exit", "left".
+ * Anything else (including missing status) is treated as ACTIVE — we
+ * prefer to keep a record than wrongly hide it.
+ */
+function isActiveEmployee(rec) {
+  const status = (
+    pick(rec, 'Employeestatus', 'EmployeeStatus', 'Employee_Status',
+              'EmploymentStatus', 'Employment_Status', 'Status') || ''
+  ).toLowerCase();
+  if (!status) return true;
+  const INACTIVE_TERMS = ['resigned', 'terminated', 'inactive', 'left', 'exit',
+                          'separated', 'former', 'dismiss', 'fired'];
+  return !INACTIVE_TERMS.some(t => status.includes(t));
+}
+
+/**
  * Upsert one Zoho employee into the users table.
  *   - If no row exists for this email → INSERT with source='zoho'
  *   - If a row already exists with source='zoho' → UPDATE the safe fields
@@ -176,8 +197,37 @@ async function upsertEmployee(rec) {
     return { skipped: true, reason: 'missing EmployeeID or Email', rec };
   }
 
-  const name = [firstName, lastName].filter(Boolean).join(' ') || email.split('@')[0];
   const cleanEmail = email.toLowerCase();
+  const isActive = isActiveEmployee(rec);
+
+  // ── Inactive (resigned / terminated) handling ──
+  //   - Brand new + inactive → don't even insert
+  //   - Existing 'zoho' row + now inactive → mark status='inactive' so
+  //     they hide from the list and can't log in
+  //   - Existing 'manual'/'nxtpeople' row → leave alone (HR/admin owns
+  //     their lifecycle, not Zoho)
+  if (!isActive) {
+    const existing = await pool.query(
+      "SELECT id, source FROM users WHERE LOWER(email) = $1 LIMIT 1",
+      [cleanEmail]
+    );
+    if (existing.rows.length === 0) {
+      return { skipped: true, reason: 'inactive in Zoho' };
+    }
+    const cur = existing.rows[0];
+    if (cur.source === 'zoho') {
+      await pool.query(
+        "UPDATE users SET status = 'inactive', last_synced_at = NOW() WHERE id = $1",
+        [cur.id]
+      );
+      return { touched: true, deactivated: true };
+    }
+    // manual/nxtpeople rows — don't auto-deactivate from Zoho
+    await pool.query("UPDATE users SET last_synced_at = NOW() WHERE id = $1", [cur.id]);
+    return { touched: true };
+  }
+
+  const name = [firstName, lastName].filter(Boolean).join(' ') || email.split('@')[0];
   const initials = name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
   // Find any existing row for this email (regardless of id)
@@ -202,11 +252,13 @@ async function upsertEmployee(rec) {
 
   const cur = existing.rows[0];
   if (cur?.source === 'zoho') {
-    // Refresh data from Zoho — it's the source of truth for this row
+    // Refresh data from Zoho — it's the source of truth for this row.
+    // Also force status back to 'active' in case they were resigned then
+    // re-hired (so they reappear in the directory).
     await pool.query(`
       UPDATE users
          SET name = $1, designation = $2, dept = $3, phone = $4,
-             photo_url = $5, avatar = $6, last_synced_at = NOW()
+             photo_url = $5, avatar = $6, status = 'active', last_synced_at = NOW()
        WHERE id = $7
     `, [name, designation, dept, phone, photo, initials, cur.id]);
     return { updated: true };
@@ -226,21 +278,22 @@ async function syncZohoEmployees() {
   }
   try {
     const records = await fetchAllEmployees();
-    let inserted = 0, updated = 0, touched = 0, skipped = 0;
+    let inserted = 0, updated = 0, touched = 0, skipped = 0, deactivated = 0;
     for (const rec of records) {
       try {
         const r = await upsertEmployee(rec);
-        if (r.inserted)      inserted++;
-        else if (r.updated)  updated++;
-        else if (r.touched)  touched++;
-        else if (r.skipped)  skipped++;
+        if (r.inserted)         inserted++;
+        else if (r.updated)     updated++;
+        else if (r.touched)     touched++;
+        else if (r.skipped)     skipped++;
+        if (r.deactivated)      deactivated++;
       } catch (perRowErr) {
         skipped++;
         console.warn('[zoho] upsert failed for one record:', perRowErr.message);
       }
     }
-    const summary = { ok: true, total: records.length, inserted, updated, touched, skipped, at: new Date().toISOString() };
-    console.log(`[zoho] sync done — fetched ${records.length}, new ${inserted}, updated ${updated}, touched ${touched}, skipped ${skipped}`);
+    const summary = { ok: true, total: records.length, inserted, updated, touched, skipped, deactivated, at: new Date().toISOString() };
+    console.log(`[zoho] sync done — fetched ${records.length}, new ${inserted}, updated ${updated}, touched ${touched}, skipped ${skipped}, deactivated ${deactivated}`);
     return summary;
   } catch (err) {
     console.error('[zoho] sync failed:', err.message);

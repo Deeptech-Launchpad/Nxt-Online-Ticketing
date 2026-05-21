@@ -76,8 +76,18 @@ export default function AdminEmployees() {
   /* Initial load + refresh */
   const reload = async () => {
     const [u, a] = await Promise.all([fetchEmployees(), fetchAllAllocations()]);
-    // Filter out admin accounts - this page lists EMPLOYEES only.
-    setUsers(Array.isArray(u) ? u.filter(x => x.role !== 'admin') : []);
+    // Filter out:
+    //   - admin accounts (this page lists EMPLOYEES only)
+    //   - Zoho-sourced rows marked inactive (they're resigned/terminated
+    //     per Zoho — hide them entirely so the page shows ACTIVE company
+    //     employees only). Local/NxtPeople inactive users are still shown
+    //     with the INACTIVE badge so admin can re-activate them.
+    setUsers(Array.isArray(u)
+      ? u.filter(x =>
+          x.role !== 'admin' &&
+          !(x.source === 'zoho' && x.status === 'inactive')
+        )
+      : []);
     setAllocations(Array.isArray(a) ? a : []);
   };
   useEffect(() => { reload(); }, []);
