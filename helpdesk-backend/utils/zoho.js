@@ -278,19 +278,6 @@ async function syncZohoEmployees() {
   }
   try {
     const records = await fetchAllEmployees();
-
-    // ── DEBUG: log the first record's keys + any status-like fields ──
-    // so we can confirm which status field & values Zoho returns for THIS
-    // account. Remove this block once active-employee filtering is working.
-    if (records.length > 0) {
-      const first = records[0];
-      const keys = Object.keys(first).sort();
-      console.log('[zoho debug] first record keys:', keys.join(', '));
-      const statusFields = keys.filter(k => /status|employment|active|exit|terminat|resign/i.test(k));
-      console.log('[zoho debug] possible status fields & values:',
-        Object.fromEntries(statusFields.map(k => [k, first[k]])));
-    }
-
     let inserted = 0, updated = 0, touched = 0, skipped = 0, deactivated = 0;
     for (const rec of records) {
       try {
