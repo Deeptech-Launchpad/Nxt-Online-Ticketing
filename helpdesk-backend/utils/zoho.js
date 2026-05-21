@@ -60,8 +60,13 @@ async function getAccessToken() {
   const now = Date.now();
   if (cachedToken && now < cachedExpiry) return cachedToken;
 
-  // Strip any accidental trailing slash so we don't end up with //oauth
-  const base = String(Z_AUTH || '').replace(/\/+$/, '');
+  // Tolerate either form:
+  //   ZOHO_AUTH_URL=https://accounts.zoho.in                  ← just the host
+  //   ZOHO_AUTH_URL=https://accounts.zoho.in/oauth/v2/token   ← full path
+  // Strip any trailing /oauth/... so we can always append it ourselves.
+  const base = String(Z_AUTH || '')
+    .replace(/\/+$/, '')
+    .replace(/\/oauth\/.*$/, '');
   const url = `${base}/oauth/v2/token`;
 
   const body = new URLSearchParams({
@@ -93,7 +98,11 @@ async function getAccessToken() {
  */
 async function fetchAllEmployees() {
   const token = await getAccessToken();
-  const base = String(Z_API || '').replace(/\/+$/, '');
+  // Tolerate either form for ZOHO_API_DOMAIN — just host, or host + path
+  const base = String(Z_API || '')
+    .replace(/\/+$/, '')
+    .replace(/\/people\/api\/.*$/, '')
+    .replace(/\/people\/?$/, '');
   const PAGE = 200;
   const all = [];
   let sIndex = 1;
