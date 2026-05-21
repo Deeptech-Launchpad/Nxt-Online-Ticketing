@@ -34,26 +34,53 @@ function isConfigured() {
 }
 
 /**
+ * Read a fetch response as JSON, but fall back to text if it isn't JSON —
+ * so the caller sees a useful error message (often a Zoho HTML error page)
+ * instead of "Unexpected token '<'".
+ */
+async function readResponse(res, label) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const snippet = text.slice(0, 200).replace(/\s+/g, ' ').trim();
+    throw new Error(
+      `${label} returned non-JSON (status ${res.status}). First 200 chars: ${snippet}`
+    );
+  }
+}
+
+/**
  * Exchange the long-lived refresh_token for a short-lived access_token.
  * Cached for 50 minutes so we don't hammer the auth endpoint.
+ * Sends parameters in the body (form-urlencoded) which is what Zoho's
+ * OAuth endpoint requires; some Zoho regions reject query-string params.
  */
 async function getAccessToken() {
   const now = Date.now();
   if (cachedToken && now < cachedExpiry) return cachedToken;
 
-  const url = `${Z_AUTH}/oauth/v2/token`
-    + `?refresh_token=${encodeURIComponent(Z_REFR)}`
-    + `&client_id=${encodeURIComponent(Z_ID)}`
-    + `&client_secret=${encodeURIComponent(Z_SECRET)}`
-    + `&grant_type=refresh_token`;
+  // Strip any accidental trailing slash so we don't end up with //oauth
+  const base = String(Z_AUTH || '').replace(/\/+$/, '');
+  const url = `${base}/oauth/v2/token`;
 
-  const res = await fetch(url, { method: 'POST' });
-  const data = await res.json();
+  const body = new URLSearchParams({
+    refresh_token: Z_REFR,
+    client_id:     Z_ID,
+    client_secret: Z_SECRET,
+    grant_type:    'refresh_token',
+  }).toString();
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  const data = await readResponse(res, `Zoho token endpoint (${url})`);
   if (!data.access_token) {
     throw new Error(`Zoho token refresh failed: ${JSON.stringify(data)}`);
   }
   cachedToken = data.access_token;
-  // expires_in is seconds; cache for slightly less than that to be safe
   const ttlMs = ((data.expires_in || 3600) - 600) * 1000;
   cachedExpiry = now + ttlMs;
   return cachedToken;
@@ -66,17 +93,18 @@ async function getAccessToken() {
  */
 async function fetchAllEmployees() {
   const token = await getAccessToken();
+  const base = String(Z_API || '').replace(/\/+$/, '');
   const PAGE = 200;
   const all = [];
   let sIndex = 1;
 
   while (true) {
-    const url = `${Z_API}/people/api/forms/employee/getRecords`
+    const url = `${base}/people/api/forms/employee/getRecords`
       + `?sIndex=${sIndex}&limit=${PAGE}`;
     const res = await fetch(url, {
       headers: { Authorization: `Zoho-oauthtoken ${token}` },
     });
-    const data = await res.json();
+    const data = await readResponse(res, `Zoho employees endpoint (${url})`);
 
     // Zoho's response shape can vary. The most common shapes:
     //   { response: { result: [ { <recordId>: [ {...fields} ] }, ... ] } }
