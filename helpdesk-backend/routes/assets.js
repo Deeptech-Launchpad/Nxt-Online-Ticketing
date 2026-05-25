@@ -95,7 +95,7 @@ router.get('/:id', async (req, res) => {
 // ── POST create new asset ───────────────────────────────────
 router.post('/', async (req, res) => {
   const {
-    name, brand, model, type, serial_number, division, organization_id,
+    name, brand, model, configuration, type, serial_number, division, organization_id,
     ownership_type, owned_by_division, personal_owner_name, personal_owner_contact,
     vendor_name, vendor_contact, rental_type, rent_start_date, rent_end_date,
     quantity, qty_in_use, qty_repairing, qty_scrap, status,
@@ -106,17 +106,17 @@ router.post('/', async (req, res) => {
     const id = await generateAssetId();
     const result = await pool.query(`
       INSERT INTO assets (
-        id, name, brand, model, type, serial_number, division, organization_id,
+        id, name, brand, model, configuration, type, serial_number, division, organization_id,
         ownership_type, owned_by_division, personal_owner_name, personal_owner_contact,
         vendor_name, vendor_contact, rental_type, rent_start_date, rent_end_date,
         quantity, qty_in_use, qty_repairing, qty_scrap, status,
         warranty_status, warranty_expiry, purchase_date, assigned_to
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
-        $17,$18,$19,$20,$21,$22,$23,$24,$25,$26
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
+        $18,$19,$20,$21,$22,$23,$24,$25,$26,$27
       ) RETURNING *`,
       [
-        id, name, brand, model || null, type, serial_number, division, organization_id || null,
+        id, name, brand, model || null, configuration || null, type, serial_number, division, organization_id || null,
         ownership_type, owned_by_division, personal_owner_name, personal_owner_contact,
         vendor_name, vendor_contact, rental_type,
         rent_start_date || null, rent_end_date || null,
@@ -134,7 +134,7 @@ router.post('/', async (req, res) => {
 // ── PUT update asset ────────────────────────────────────────
 router.put('/:id', async (req, res) => {
   const {
-    name, brand, model, type, serial_number, division, organization_id,
+    name, brand, model, configuration, type, serial_number, division, organization_id,
     ownership_type, owned_by_division, personal_owner_name, personal_owner_contact,
     vendor_name, vendor_contact, rental_type, rent_start_date, rent_end_date,
     quantity, qty_in_use, qty_repairing, qty_scrap, status,
@@ -144,15 +144,15 @@ router.put('/:id', async (req, res) => {
   try {
     const result = await pool.query(`
       UPDATE assets SET
-        name=$1, brand=$2, model=$3, type=$4, serial_number=$5, division=$6, organization_id=$7,
-        ownership_type=$8, owned_by_division=$9, personal_owner_name=$10, personal_owner_contact=$11,
-        vendor_name=$12, vendor_contact=$13, rental_type=$14, rent_start_date=$15, rent_end_date=$16,
-        quantity=$17, qty_in_use=$18, qty_repairing=$19, qty_scrap=$20, status=$21,
-        warranty_status=$22, warranty_expiry=$23, purchase_date=$24, assigned_to=$25,
+        name=$1, brand=$2, model=$3, configuration=$4, type=$5, serial_number=$6, division=$7, organization_id=$8,
+        ownership_type=$9, owned_by_division=$10, personal_owner_name=$11, personal_owner_contact=$12,
+        vendor_name=$13, vendor_contact=$14, rental_type=$15, rent_start_date=$16, rent_end_date=$17,
+        quantity=$18, qty_in_use=$19, qty_repairing=$20, qty_scrap=$21, status=$22,
+        warranty_status=$23, warranty_expiry=$24, purchase_date=$25, assigned_to=$26,
         updated_at=NOW()
-      WHERE id=$26 RETURNING *`,
+      WHERE id=$27 RETURNING *`,
       [
-        name, brand, model || null, type, serial_number, division, organization_id || null,
+        name, brand, model || null, configuration || null, type, serial_number, division, organization_id || null,
         ownership_type, owned_by_division, personal_owner_name, personal_owner_contact,
         vendor_name, vendor_contact, rental_type,
         rent_start_date || null, rent_end_date || null,

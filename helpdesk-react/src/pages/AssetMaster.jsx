@@ -13,6 +13,7 @@ const defaultForm = {
   brand: '',
   model: '',
   serialNumber: '',
+  configuration: '',
   quantity: '',
   purchaseDate: '',
   warrantyExpiry: '',
@@ -180,6 +181,7 @@ export default function AssetMaster() {
           name:                 a.name,
           brand:                a.brand,
           model:                a.model || '',
+          configuration:        a.configuration || '',
           type:                 a.type,
           serialNumber:         a.serial_number,
           division:             a.division,
@@ -222,7 +224,7 @@ export default function AssetMaster() {
       const res  = await fetch(`${API}/assets`);
       const data = await res.json();
       setAssets(data.map(a => ({
-        id: a.id, name: a.name, brand: a.brand, model: a.model || '', type: a.type,
+        id: a.id, name: a.name, brand: a.brand, model: a.model || '', configuration: a.configuration || '', type: a.type,
         serialNumber: a.serial_number, division: a.division,
         organization: a.organization_name || '', organizationId: a.organization_id,
         ownershipType: a.ownership_type, ownedByDivision: a.owned_by_division,
@@ -333,6 +335,7 @@ export default function AssetMaster() {
       name: asset.name,
       brand: asset.brand,
       model: asset.model || '',
+      configuration: asset.configuration || '',
       serialNumber: asset.serialNumber,
       quantity: String(asset.quantity),
       purchaseDate: asset.purchaseDate,
@@ -403,6 +406,7 @@ export default function AssetMaster() {
       name:                 form.name.trim(),
       brand:                form.brand.trim(),
       model:                (form.model || '').trim(),
+      configuration:        (form.configuration || '').trim(),
       serial_number:        form.serialNumber.trim(),
       type:                 form.type,
       division:             form.division,
@@ -800,6 +804,18 @@ export default function AssetMaster() {
                   <input className="form-input-light" placeholder="e.g. SN123456" value={form.serialNumber} onChange={e => handleChange('serialNumber', e.target.value)} />
                 </FormField>
                 {/* Removed Assigned To */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <FormField label="Configuration">
+                    <textarea
+                      className="form-input-light"
+                      placeholder={"e.g.\nCPU: Intel i7-12700H\nRAM: 16GB DDR4\nStorage: 512GB NVMe SSD\nOS: Windows 11 Pro"}
+                      value={form.configuration}
+                      onChange={e => handleChange('configuration', e.target.value)}
+                      rows={4}
+                      style={{ resize: 'vertical', minHeight: 88, fontFamily: 'inherit', lineHeight: 1.45 }}
+                    />
+                  </FormField>
+                </div>
               </div>
             </div>
 
@@ -1095,6 +1111,22 @@ export default function AssetMaster() {
                 <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{viewingHistory.name} · {viewingHistory.id}</div>
               </div>
               <button onClick={() => setViewingHistory(null)} className="action-btn-gray"><span className="material-symbols-outlined">close</span></button>
+            </div>
+
+            {/* Asset details summary — brand / model / type / serial / configuration */}
+            <div style={{ background: 'var(--off-white)', borderRadius: 12, padding: '14px 16px', marginBottom: 18, border: '1px solid var(--slate)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px 18px', fontSize: 13 }}>
+                <div><span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Brand:</span> <span style={{ color: 'var(--navy)' }}>{viewingHistory.brand || '-'}</span></div>
+                <div><span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Model:</span> <span style={{ color: 'var(--navy)' }}>{viewingHistory.model || '-'}</span></div>
+                <div><span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Asset Type:</span> <span style={{ color: 'var(--navy)' }}>{viewingHistory.type || '-'}</span></div>
+                <div><span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Serial No:</span> <span style={{ color: 'var(--navy)', fontFamily: "'DM Mono',monospace" }}>{viewingHistory.serialNumber || '-'}</span></div>
+              </div>
+              {viewingHistory.configuration && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--slate)' }}>
+                  <div style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 6 }}>Configuration</div>
+                  <pre style={{ margin: 0, fontFamily: 'inherit', fontSize: 13, color: 'var(--navy)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{viewingHistory.configuration}</pre>
+                </div>
+              )}
             </div>
 
             {historyLoading ? (

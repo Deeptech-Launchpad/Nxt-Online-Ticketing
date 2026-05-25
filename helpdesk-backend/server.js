@@ -252,6 +252,7 @@ async function initDatabase() {
       ALTER TABLE assets ADD COLUMN IF NOT EXISTS purchase_from    VARCHAR(150);
       ALTER TABLE assets ADD COLUMN IF NOT EXISTS purchase_invoice VARCHAR(100);
       ALTER TABLE assets ADD COLUMN IF NOT EXISTS model            VARCHAR(100);
+      ALTER TABLE assets ADD COLUMN IF NOT EXISTS configuration    TEXT;
     `);
 
     // Ticket extra fields (Raise Ticket Step 2 + Step 3)
