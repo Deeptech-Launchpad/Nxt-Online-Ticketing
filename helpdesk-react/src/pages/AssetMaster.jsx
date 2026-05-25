@@ -11,6 +11,7 @@ const defaultForm = {
   id: '',
   name: '',
   brand: '',
+  model: '',
   serialNumber: '',
   quantity: '',
   purchaseDate: '',
@@ -178,6 +179,7 @@ export default function AssetMaster() {
           id:                   a.id,
           name:                 a.name,
           brand:                a.brand,
+          model:                a.model || '',
           type:                 a.type,
           serialNumber:         a.serial_number,
           division:             a.division,
@@ -220,7 +222,7 @@ export default function AssetMaster() {
       const res  = await fetch(`${API}/assets`);
       const data = await res.json();
       setAssets(data.map(a => ({
-        id: a.id, name: a.name, brand: a.brand, type: a.type,
+        id: a.id, name: a.name, brand: a.brand, model: a.model || '', type: a.type,
         serialNumber: a.serial_number, division: a.division,
         organization: a.organization_name || '', organizationId: a.organization_id,
         ownershipType: a.ownership_type, ownedByDivision: a.owned_by_division,
@@ -285,6 +287,10 @@ export default function AssetMaster() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(defaultForm);
   const [formError, setFormError] = useState('');
+  // When true, typing in Brand/Model auto-fills Asset Name with "Brand Model".
+  // Flips to false the moment the admin manually edits Asset Name, so we never
+  // overwrite their custom name. Reset to true on new-asset, false on edit.
+  const [nameAutoFill, setNameAutoFill] = useState(true);
 
   const totalAssets = assets.reduce((s, a) => s + (Number(a.quantity) || 0), 0);
   const totalInUse = assets.reduce((s, a) => s + (Number(a.qtyInUse) || 0), 0);
@@ -314,6 +320,7 @@ export default function AssetMaster() {
     setEditingId(null);
     setForm({ ...defaultForm, id: generateId(assets) });
     setFormError('');
+    setNameAutoFill(true);
     setShowModal(true);
   };
 
@@ -325,6 +332,7 @@ export default function AssetMaster() {
       id: asset.id,
       name: asset.name,
       brand: asset.brand,
+      model: asset.model || '',
       serialNumber: asset.serialNumber,
       quantity: String(asset.quantity),
       purchaseDate: asset.purchaseDate,
@@ -346,6 +354,7 @@ export default function AssetMaster() {
       rentEndDate: asset.rentEndDate || '',
     });
     setFormError('');
+    setNameAutoFill(false); // existing asset — preserve its current name
     setShowModal(true);
   };
 
@@ -356,7 +365,19 @@ export default function AssetMaster() {
   };
 
   const handleChange = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+    setForm(prev => {
+      const next = { ...prev, [field]: value };
+      // Brand or Model changed → auto-fill Asset Name as "Brand Model"
+      // (only while the admin hasn't manually edited the name yet).
+      if ((field === 'brand' || field === 'model') && nameAutoFill) {
+        const b = (field === 'brand' ? value : prev.brand || '').trim();
+        const m = (field === 'model' ? value : prev.model || '').trim();
+        next.name = [b, m].filter(Boolean).join(' ');
+      }
+      return next;
+    });
+    // Admin typed in Asset Name themselves → stop auto-syncing for this form
+    if (field === 'name') setNameAutoFill(false);
   };
 
   const validate = () => {
@@ -381,6 +402,7 @@ export default function AssetMaster() {
     const payload = {
       name:                 form.name.trim(),
       brand:                form.brand.trim(),
+      model:                (form.model || '').trim(),
       serial_number:        form.serialNumber.trim(),
       type:                 form.type,
       division:             form.division,
@@ -427,7 +449,7 @@ export default function AssetMaster() {
   };
 
   const exportToCSV = () => {
-    const headers = ["Asset ID", "Date", "Purchase Date", "Name", "Brand", "Organization", "Ownership", "Location", "Serial No", "Recd Qty", "In Stock", "In Use", "Under Repair", "Scraped", "Owned By Office", "Rented", "Owned By User", "Warranty Status", "Warranty Expiry Date"];
+    const headers = ["Asset ID", "Date", "Purchase Date", "Asset Type", "Name", "Brand", "Model", "Organization", "Ownership", "Location", "Serial No", "Recd Qty", "In Stock", "In Use", "Under Repair", "Scraped", "Owned By Office", "Rented", "Owned By User", "Warranty Status", "Warranty Expiry Date"];
     const rows = filtered.map(a => {
       const spare = a.quantity - a.qtyInUse - (a.qtyRepairing||0) - (a.qtyScrap||0);
       const ownedByOffice = (!a.ownershipType || a.ownershipType === 'Office Owned') ? a.quantity : 0;
@@ -437,7 +459,7 @@ export default function AssetMaster() {
         a.id,
         a.createdAt ? new Date(a.createdAt).toLocaleDateString() : 'N/A',
         a.purchaseDate ? new Date(a.purchaseDate).toLocaleDateString() : 'N/A',
-        a.name, a.brand, a.organization || 'N/A', a.ownershipType || 'Office Owned', a.division, a.serialNumber,
+        a.type || '', a.name, a.brand, a.model || '', a.organization || 'N/A', a.ownershipType || 'Office Owned', a.division, a.serialNumber,
         a.quantity, spare, a.qtyInUse, a.qtyRepairing || 0, a.qtyScrap || 0,
         ownedByOffice, rented, ownedByUser, a.warrantyStatus,
         a.warrantyExpiry ? new Date(a.warrantyExpiry).toLocaleDateString() : 'N/A'
@@ -608,6 +630,7 @@ export default function AssetMaster() {
               <th>Asset ID</th>
               <th>Date</th>
               <th>Purchase Date</th>
+              <th>Asset Type</th>
               <th>Asset Name &amp; Brand</th>
               <th>Organization</th>
               <th>Ownership</th>
@@ -635,9 +658,12 @@ export default function AssetMaster() {
                 <td><span style={{ fontSize: 12.5, fontFamily: "'DM Mono',monospace", color: 'var(--blue)', fontWeight: 700 }}>{asset.id}</span></td>
                 <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : '-'}</td>
                 <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.purchaseDate ? new Date(asset.purchaseDate).toLocaleDateString() : '-'}</td>
+                <td style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>{asset.type || '-'}</td>
                 <td>
                   <div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: 14 }}>{asset.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>{asset.brand}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
+                    {asset.brand}{asset.model ? ` · ${asset.model}` : ''}
+                  </div>
                 </td>
                 <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{asset.organization || '---'}</td>
                 <td>
@@ -761,6 +787,9 @@ export default function AssetMaster() {
                 </FormField>
                 <FormField label="Brand" required>
                   <input className="form-input-light" placeholder="e.g. Apple, Dell, HP" value={form.brand} onChange={e => handleChange('brand', e.target.value)} />
+                </FormField>
+                <FormField label="Model">
+                  <input className="form-input-light" placeholder="e.g. MacBook Pro 16, Latitude 5420" value={form.model} onChange={e => handleChange('model', e.target.value)} />
                 </FormField>
                 <FormField label="Asset Type">
                   <select className="form-select-light" value={form.type} onChange={e => handleChange('type', e.target.value)}>
