@@ -289,10 +289,9 @@ export default function AssetMaster() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(defaultForm);
   const [formError, setFormError] = useState('');
-  // When true, typing in Brand/Model auto-fills Asset Name with "Brand Model".
-  // Flips to false the moment the admin manually edits Asset Name, so we never
-  // overwrite their custom name. Reset to true on new-asset, false on edit.
-  const [nameAutoFill, setNameAutoFill] = useState(true);
+
+  // Asset Name is always derived from Brand + Model — no manual edit allowed.
+  const derivedAssetName = `${(form.brand || '').trim()} ${(form.model || '').trim()}`.trim();
 
   const totalAssets = assets.reduce((s, a) => s + (Number(a.quantity) || 0), 0);
   const totalInUse = assets.reduce((s, a) => s + (Number(a.qtyInUse) || 0), 0);
@@ -322,7 +321,6 @@ export default function AssetMaster() {
     setEditingId(null);
     setForm({ ...defaultForm, id: generateId(assets) });
     setFormError('');
-    setNameAutoFill(true);
     setShowModal(true);
   };
 
@@ -357,7 +355,6 @@ export default function AssetMaster() {
       rentEndDate: asset.rentEndDate || '',
     });
     setFormError('');
-    setNameAutoFill(false); // existing asset — preserve its current name
     setShowModal(true);
   };
 
@@ -368,24 +365,11 @@ export default function AssetMaster() {
   };
 
   const handleChange = (field, value) => {
-    setForm(prev => {
-      const next = { ...prev, [field]: value };
-      // Brand or Model changed → auto-fill Asset Name as "Brand Model"
-      // (only while the admin hasn't manually edited the name yet).
-      if ((field === 'brand' || field === 'model') && nameAutoFill) {
-        const b = (field === 'brand' ? value : prev.brand || '').trim();
-        const m = (field === 'model' ? value : prev.model || '').trim();
-        next.name = [b, m].filter(Boolean).join(' ');
-      }
-      return next;
-    });
-    // Admin typed in Asset Name themselves → stop auto-syncing for this form
-    if (field === 'name') setNameAutoFill(false);
+    setForm(prev => ({ ...prev, [field]: value }));
   };
 
   const validate = () => {
     if (!form.division) return 'Division is required.';
-    if (!form.name.trim()) return 'Asset Name is required.';
     if (!form.brand.trim()) return 'Brand is required.';
     if (!form.serialNumber.trim()) return 'Serial Number is required.';
     if (!form.quantity || isNaN(Number(form.quantity)) || Number(form.quantity) <= 0) return 'Valid Quantity is required.';
@@ -403,7 +387,7 @@ export default function AssetMaster() {
 
     const org = organizations.find(o => o === form.organization);
     const payload = {
-      name:                 form.name.trim(),
+      name:                 derivedAssetName,
       brand:                form.brand.trim(),
       model:                (form.model || '').trim(),
       configuration:        (form.configuration || '').trim(),
@@ -786,8 +770,14 @@ export default function AssetMaster() {
                 <FormField label="Asset ID">
                   <input className="form-input-light" value={form.id} readOnly style={{ background: 'var(--off-white)', color: 'var(--text-muted)', fontFamily: "'DM Mono',monospace", fontSize: 14 }} />
                 </FormField>
-                <FormField label="Asset Name" required>
-                  <input className="form-input-light" placeholder="e.g. MacBook Pro 16" value={form.name} onChange={e => handleChange('name', e.target.value)} />
+                <FormField label="Asset Name">
+                  <input
+                    className="form-input-light"
+                    placeholder="Auto-filled from Brand + Model"
+                    value={derivedAssetName}
+                    readOnly
+                    style={{ background: 'var(--off-white)', color: 'var(--text-muted)' }}
+                  />
                 </FormField>
                 <FormField label="Brand" required>
                   <input className="form-input-light" placeholder="e.g. Apple, Dell, HP" value={form.brand} onChange={e => handleChange('brand', e.target.value)} />
