@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Modal } from '../components/Modal';
@@ -32,6 +32,12 @@ export default function AdminTicketDetail() {
   const [closeModal, setCloseModal] = useState(false);
   const [resNote, setResNote] = useState('');
   const [privateNotes, setPrivateNotes] = useState('');
+  // Guard against double-fire of the resolve action (double-click on Confirm,
+  // network retry, React batching, etc.) — without this each extra call
+  // creates another "has been resolved" notification for the employee.
+  // Use a ref (synchronous) instead of useState to also catch fast double-clicks
+  // that happen before React re-renders.
+  const resolvingRef = useRef(false);
 
   const t = tickets.find(x => x.id === id);
 
@@ -95,18 +101,23 @@ export default function AdminTicketDetail() {
     showToast(`Priority set to ${p}`, 'success');
   };
 
-  const handleResolve = () => {
+  const handleResolve = async () => {
+    if (resolvingRef.current) return;          // already in flight → ignore extra clicks
     const note = resNote.trim();
     if (!note) {
       showToast('Please write a short note about the action you took.', 'error');
       return;
     }
-    // One PUT does both: sets status='resolved' AND saves the note.
-    // Don't also call setStatus('closed') — that fires a duplicate notification.
-    setResolution(t.id, note);
-    setCloseModal(false);
-    setResNote('');
-    showToast('Ticket resolved and employee notified', 'success');
+    resolvingRef.current = true;
+    try {
+      // One PUT does both: sets status='resolved' AND saves the note.
+      await setResolution(t.id, note);
+      setCloseModal(false);
+      setResNote('');
+      showToast('Ticket resolved and employee notified', 'success');
+    } finally {
+      resolvingRef.current = false;
+    }
   };
 
   const handleReopen = () => {
