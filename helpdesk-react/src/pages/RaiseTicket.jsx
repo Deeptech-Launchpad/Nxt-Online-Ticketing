@@ -24,19 +24,34 @@ const PRIORITIES = [
   { id: 'High',   icon: 'warning',  desc: 'Completely blocked, urgent',  color: '#dc2626', bg: '#fef2f2' },
 ];
 
-/*
-  PLACEHOLDER DEVICE LIST - same shape as MyAssets.
-  Real endpoint will be: GET /api/assets/me
-*/
-const PLACEHOLDER_DEVICES = [
-  { id: 'AST-2022-094', name: 'Dell Latitude 5520', icon: 'laptop',     serial: 'DL55-9012',  date: 'Oct 15, 2022', warranty: 'Valid till Dec 2025', condition: 'Good', categories: ['Hardware', 'Network', 'Other'] },
-  { id: 'AST-2023-112', name: 'iPhone 14 Pro',      icon: 'smartphone', serial: 'IP14-4421',  date: 'Jan 10, 2023', warranty: 'Expiring Soon',       condition: 'Good', categories: ['Hardware', 'Other'] },
-  { id: 'AST-2022-401', name: 'Dell UltraSharp 27"', icon: 'monitor',   serial: 'DU27-8891',  date: 'Oct 15, 2022', warranty: 'Valid till Dec 2025', condition: 'Good', categories: ['Hardware'] },
-  { id: 'LIC-2024-001', name: 'MS Office 365',      icon: 'apps',       serial: 'OFF365-PBK', date: 'Apr 01, 2024', warranty: 'Valid till Apr 2025', condition: 'Active', categories: ['Software', 'Email'] },
-  { id: 'LIC-2024-002', name: 'Adobe Creative Cloud', icon: 'palette',  serial: 'ACC-9912',   date: 'Jun 15, 2024', warranty: 'Valid till Jun 2025', condition: 'Active', categories: ['Software'] },
-  { id: 'NET-2024-003', name: 'VPN Access',          icon: 'vpn_lock',  serial: 'VPN-PBK',    date: 'Jan 01, 2024', warranty: 'Active',              condition: 'Active', categories: ['Network'] },
-  { id: 'GEN-0000',     name: 'Other / Not Listed',  icon: 'help',      serial: 'N/A',        date: 'N/A',          warranty: 'N/A',                 condition: 'N/A',    categories: ['Hardware', 'Software', 'Network', 'Email', 'Printer', 'Other'] },
-];
+// "Other / Not Listed" fallback — always appended to the device picker so
+// employees with no assigned assets (or with an issue not tied to a specific
+// device) can still raise a ticket. Real assets come from GET /api/assets/me.
+const OTHER_DEVICE = {
+  id: 'GEN-0000',
+  name: 'Other / Not Listed',
+  icon: 'help',
+  serial: 'N/A',
+  date: 'N/A',
+  warranty: 'N/A',
+  condition: 'N/A',
+};
+
+// Map an asset's `type` (Laptop / Monitor / etc.) to a Material Symbols icon
+// so the device card visual matches what the employee actually owns.
+const ASSET_TYPE_ICON = {
+  Laptop:     'laptop',
+  Desktop:    'desktop_windows',
+  Monitor:    'monitor',
+  Printer:    'print',
+  Networking: 'router',
+  UPS:        'battery_charging_full',
+  Phone:      'smartphone',
+  Mobile:     'smartphone',
+  Other:      'devices_other',
+};
+
+const API = '/api';
 
 const REMOTES = [
   { id: 'In Person',   icon: 'person',           sub: 'On-site visit' },
@@ -78,17 +93,49 @@ export default function RaiseTicket() {
   const [remote, setRemote]         = useState('In Person');
   const [timeSlot, setTimeSlot]     = useState('Any Time');
 
-  // Pre-fill from "Raise ticket for this device" link
+  // Real assets allocated to the logged-in employee (from /api/assets/me).
+  // Empty array = no assets assigned → only "Other / Not Listed" will show.
+  const [myAssets, setMyAssets] = useState([]);
+
+  useEffect(() => {
+    const email = currentUser?.email;
+    if (!email) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res  = await fetch(`${API}/assets/me?email=${encodeURIComponent(email)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const mapped = data.map(a => ({
+          id:        a.id,
+          name:      a.name,
+          icon:      ASSET_TYPE_ICON[a.type] || 'devices_other',
+          serial:    a.serial_number || 'N/A',
+          date:      a.allocated_at ? new Date(a.allocated_at).toLocaleDateString() : (a.purchase_date ? new Date(a.purchase_date).toLocaleDateString() : 'N/A'),
+          warranty:  a.warranty_expiry ? `Valid till ${new Date(a.warranty_expiry).toLocaleDateString()}` : (a.warranty_status || 'N/A'),
+          condition: a.condition || 'Good',
+        }));
+        setMyAssets(mapped);
+      } catch {
+        // Silently fall back to "Other / Not Listed" only
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser?.email]);
+
+  // Pre-fill from "Raise ticket for this device" link (e.g. from My Assets page)
   useEffect(() => {
     const incoming = location.state;
-    if (incoming?.device) {
-      const match = PLACEHOLDER_DEVICES.find(d => d.id === incoming.assetId) ||
-                    PLACEHOLDER_DEVICES.find(d => d.name === incoming.device);
-      if (match) setSelectedDevice(match);
-    }
-  }, [location.state]);
+    if (!incoming?.device) return;
+    const match = myAssets.find(d => d.id === incoming.assetId) ||
+                  myAssets.find(d => d.name === incoming.device);
+    if (match) setSelectedDevice(match);
+  }, [location.state, myAssets]);
 
-  const filteredDevices = PLACEHOLDER_DEVICES.filter(d => d.categories.includes(category));
+  // Always include "Other / Not Listed" as the final card so employees with
+  // no allocated devices (or with an asset-less issue) can still continue.
+  const filteredDevices = [...myAssets, OTHER_DEVICE];
 
   const goStep = (n) => {
     if (n === 2 && !subject.trim()) {
@@ -329,20 +376,16 @@ function Step2({ devices, selected, setSelected, notes, setNotes, onBack, onNext
           Which device is affected?
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          Showing placeholder devices for the selected category - real assets will be wired in next phase.
+          {devices.length <= 1
+            ? 'No assets assigned to you yet — continue with "Other / Not Listed" or contact your admin.'
+            : 'Pick the device this issue is about, or "Other / Not Listed" if it isn\'t one of your assigned devices.'}
         </div>
       </div>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-        {devices.length === 0 ? (
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: 20 }}>
-            No devices match this category. Pick "Other / Not Listed" to continue.
-          </div>
-        ) : (
-          devices.map(d => (
-            <DeviceCard key={d.id} device={d} active={selected?.id === d.id} onClick={() => setSelected(d)} />
-          ))
-        )}
+        {devices.map(d => (
+          <DeviceCard key={d.id} device={d} active={selected?.id === d.id} onClick={() => setSelected(d)} />
+        ))}
       </div>
 
       {selected && <AutofillPanel device={selected} />}
@@ -625,7 +668,7 @@ function AutofillPanel({ device }) {
         display: 'flex', alignItems: 'center', gap: 6,
       }}>
         <span className="material-symbols-outlined" style={{ fontSize: 14 }}>lock</span>
-        Auto-filled from your asset records (placeholder)
+        Auto-filled from your asset records
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
         <FieldDisplay label="ASSET ID"        value={device.id} />
