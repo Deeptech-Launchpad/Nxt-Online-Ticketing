@@ -5,6 +5,23 @@ const multer  = require('multer');
 const pool    = require('../db');
 const { createNotification, getAdminEmails } = require('./_notify');
 
+// Resolve a ticket's employee_id to the user's real email.
+// employee_id can be the Zoho EmployeeID (e.g. "1001") for Zoho-synced users,
+// or the email itself for NxtPeople / manually-added users. Notifications are
+// always stored keyed by email, so without this lookup employees synced from
+// Zoho would never see their notifications.
+async function emailForTicketEmployee(pool, employeeId) {
+  if (!employeeId) return null;
+  // If it already looks like an email, trust it
+  if (String(employeeId).includes('@')) return String(employeeId).toLowerCase();
+  try {
+    const r = await pool.query('SELECT email FROM users WHERE id = $1 LIMIT 1', [employeeId]);
+    return r.rows[0]?.email || null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Multer setup for attachment uploads ──────────────────────
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
 const storage = multer.diskStorage({
@@ -138,14 +155,17 @@ router.put('/:id', async (req, res) => {
         status === 'resolved' || status === 'closed' ? 'has been resolved' :
         status === 'in-progress' ? 'is now being worked on' :
         `is now ${status}`;
-      createNotification({
-        user_email: current.employee_id,
-        type: 'ticket',
-        severity: status === 'resolved' || status === 'closed' ? 'info' : 'info',
-        title: `Your ticket ${ticketId} ${statusMsg}`,
-        description: current.subject,
-        related_id: ticketId,
-      });
+      const employeeEmail = await emailForTicketEmployee(pool, current.employee_id);
+      if (employeeEmail) {
+        createNotification({
+          user_email: employeeEmail,
+          type: 'ticket',
+          severity: status === 'resolved' || status === 'closed' ? 'info' : 'info',
+          title: `Your ticket ${ticketId} ${statusMsg}`,
+          description: current.subject,
+          related_id: ticketId,
+        });
+      }
     }
 
     if (priority) {
@@ -199,14 +219,17 @@ router.post('/:id/messages', async (req, res) => {
     if (sender_role === 'admin') {
       const t = await pool.query('SELECT employee_id, subject FROM tickets WHERE id = $1', [ticketId]);
       if (t.rows[0]) {
-        createNotification({
-          user_email: t.rows[0].employee_id,
-          type: 'ticket',
-          severity: 'info',
-          title: `Admin replied to ${ticketId}`,
-          description: message.length > 120 ? message.slice(0, 120) + '...' : message,
-          related_id: ticketId,
-        });
+        const employeeEmail = await emailForTicketEmployee(pool, t.rows[0].employee_id);
+        if (employeeEmail) {
+          createNotification({
+            user_email: employeeEmail,
+            type: 'ticket',
+            severity: 'info',
+            title: `Admin replied to ${ticketId}`,
+            description: message.length > 120 ? message.slice(0, 120) + '...' : message,
+            related_id: ticketId,
+          });
+        }
       }
     } else if (sender_role === 'employee') {
       const t = await pool.query('SELECT subject, employee_name FROM tickets WHERE id = $1', [ticketId]);

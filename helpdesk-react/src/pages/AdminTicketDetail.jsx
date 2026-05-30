@@ -101,8 +101,9 @@ export default function AdminTicketDetail() {
       showToast('Please write a short note about the action you took.', 'error');
       return;
     }
+    // One PUT does both: sets status='resolved' AND saves the note.
+    // Don't also call setStatus('closed') — that fires a duplicate notification.
     setResolution(t.id, note);
-    setStatus(t.id, 'closed');
     setCloseModal(false);
     setResNote('');
     showToast('Ticket resolved and employee notified', 'success');
