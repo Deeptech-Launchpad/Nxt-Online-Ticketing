@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { showToast } from '../components/Toast';
+import { ORGANIZATIONS } from '../data/organizations';
 
 const NAVY  = '#02172E';
 const RED   = '#CC3A3A';
@@ -27,9 +28,6 @@ const JOB_ROLES = [
 const DIVISIONS = [
   'Guntur -AndhraPradesh', 'RS Puram Coimbatore',
   'Saibaba Colony-Coimbatore', 'Thudiyalur-coimbatore', 'WFH',
-];
-const ORGANIZATIONS = [
-  'AltiusNxt', 'Yantra24x7',
 ];
 
 /* Pick an icon for the asset chip based on type */
