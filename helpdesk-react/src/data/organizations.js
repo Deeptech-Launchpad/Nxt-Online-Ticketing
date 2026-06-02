@@ -1,7 +1,7 @@
 // Shared list of organizations shown in the admin dropdowns.
 // Update this single file if the org list ever changes.
 export const ORGANIZATIONS = [
-  'Accurate Document Service',
+  'Accuratebackoffice',
   'Altius Technologies Pvt Ltd.,',
   'AltiusNXT Technologies Pvt Ltd.,',
   'Antlab',
