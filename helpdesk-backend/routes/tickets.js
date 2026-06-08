@@ -4,6 +4,11 @@ const path    = require('path');
 const multer  = require('multer');
 const pool    = require('../db');
 const { createNotification, getAdminEmails } = require('./_notify');
+const { sendMail } = require('../utils/mailer');
+const {
+  newTicketForAdmin, newTicketForUser,
+  resolvedTicketForAdmin, resolvedTicketForUser,
+} = require('../utils/emailTemplates');
 
 // Resolve a ticket's employee_id to the user's real email.
 // employee_id can be the Zoho EmployeeID (e.g. "1001") for Zoho-synced users,
@@ -96,8 +101,9 @@ router.post('/', async (req, res) => {
     );
 
     // Notify all admins about the new ticket
+    let adminEmails = [];
     try {
-      const adminEmails = await getAdminEmails();
+      adminEmails = await getAdminEmails();
       for (const email of adminEmails) {
         createNotification({
           user_email: email,
@@ -111,6 +117,26 @@ router.post('/', async (req, res) => {
     } catch (notifyErr) {
       console.error('Failed to notify admins:', notifyErr.message);
     }
+
+    // Fire-and-forget email notifications. The ticket row is already saved
+    // above, so any email-send failure must NOT change the response.
+    (async () => {
+      try {
+        const ticketRow = result.rows[0];
+        // Email all admins
+        const adminMail = newTicketForAdmin(ticketRow);
+        for (const email of adminEmails) {
+          await sendMail({ to: email, ...adminMail });
+        }
+        // Email the user who raised the ticket (resolve their real email)
+        const userEmail = await emailForTicketEmployee(pool, ticketRow.employee_id);
+        if (userEmail) {
+          await sendMail({ to: userEmail, ...newTicketForUser(ticketRow) });
+        }
+      } catch (mailErr) {
+        console.error('[mail] new-ticket emails failed:', mailErr.message);
+      }
+    })();
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -195,7 +221,31 @@ router.put('/:id', async (req, res) => {
     values.push(ticketId);
 
     const result = await pool.query(query, values);
-    res.json(result.rows[0]);
+    const updated = result.rows[0];
+
+    // Fire-and-forget resolved-ticket emails — only when the new status is
+    // 'resolved' AND the ticket wasn't already resolved before (avoid spam if
+    // admin re-saves the same status). The DB write has already succeeded;
+    // email failures must NOT change the response.
+    if (status === 'resolved' && current.status !== 'resolved' && current.status !== 'closed') {
+      (async () => {
+        try {
+          const adminEmails = await getAdminEmails();
+          const adminMail = resolvedTicketForAdmin(updated);
+          for (const email of adminEmails) {
+            await sendMail({ to: email, ...adminMail });
+          }
+          const userEmail = await emailForTicketEmployee(pool, updated.employee_id);
+          if (userEmail) {
+            await sendMail({ to: userEmail, ...resolvedTicketForUser(updated) });
+          }
+        } catch (mailErr) {
+          console.error('[mail] resolved-ticket emails failed:', mailErr.message);
+        }
+      })();
+    }
+
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
