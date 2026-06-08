@@ -52,18 +52,18 @@ export default function AdminTickets() {
             !t.id.toLowerCase().includes(s)) return false;
       }
       if (fStatus !== 'all') {
-        if (fStatus === 'Open' && !['open', 'reopened'].includes(t.status)) return false;
+        // Each filter shows ONLY its own status — no bundling. Reopened
+        // tickets used to be lumped under "Open"; they now have their own slot.
+        if (fStatus === 'Open' && t.status !== 'open') return false;
         if (fStatus === 'In Progress' && t.status !== 'in-progress') return false;
+        if (fStatus === 'Reopened' && t.status !== 'reopened') return false;
         if (fStatus === 'Resolved' && !['resolved', 'closed'].includes(t.status)) return false;
       }
 
-      // Priority handling:
-      //  - Default view ('all'): HIDE High + Very High (they live in the urgent banner above)
-      //  - Filter 'HIGH'  : show only High + Very High (override default hiding)
-      //  - Filter 'MEDIUM'/'LOW': show only that priority
-      if (fPriority === 'all') {
-        if (['High', 'Very High'].includes(t.priority)) return false;
-      } else if (fPriority === 'HIGH') {
+      // Priority handling — each filter shows exactly its own priority.
+      // Default 'all' shows every priority so nothing stays hidden behind the
+      // urgent banner (the banner is a quick-access summary, not a filter).
+      if (fPriority === 'HIGH') {
         if (!['High', 'Very High'].includes(t.priority)) return false;
       } else if (fPriority === 'MEDIUM') {
         if (t.priority !== 'Medium') return false;
@@ -229,6 +229,7 @@ export default function AdminTickets() {
           <option value="all">All Status</option>
           <option value="Open">Open</option>
           <option value="In Progress">In Progress</option>
+          <option value="Reopened">Reopened</option>
           <option value="Resolved">Resolved</option>
         </select>
         <select
