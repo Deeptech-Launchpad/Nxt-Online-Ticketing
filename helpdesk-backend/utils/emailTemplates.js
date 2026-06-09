@@ -29,9 +29,13 @@ function esc(s) {
 function fmtDate(d) {
   if (!d) return '-';
   try {
+    // Force Asia/Kolkata so emails always show IST regardless of where the
+    // server is hosted. Without this, a UTC-hosted Linux box would format
+    // timestamps in UTC and emails would appear 5:30 hours behind reality.
     return new Date(d).toLocaleString('en-IN', {
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
+      timeZone: 'Asia/Kolkata',
     });
   } catch {
     return String(d);
