@@ -122,11 +122,19 @@ const css = `
   .anx-submit:disabled { opacity: 0.7; cursor: not-allowed; }
   .anx-resend { font-size: 13px; font-weight: 500; color: #64748b; background: none; border: none; cursor: pointer; padding: 0; font-family: inherit; width: 100%; text-align: center; margin-top: 4px; }
 
-  /* Google hint + wrapper */
+  /* Google sign-in wrapper.
+     The Google widget renders a fixed-width button when the user is already
+     signed in to Google ("Continue as ..."). align-items: center keeps it
+     horizontally centred inside the card, regardless of its inner width. */
   .anx-google-hint { font-size: 13px; color: #64748b; background: #f1f5f9; padding: 10px 14px; border-radius: 9px; margin-bottom: 16px; line-height: 1.5; }
-  .anx-google-wrap { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
-  .anx-google-wrap > div { width: 100% !important; }
-  .anx-google-wrap > div > div { width: 100% !important; }
+  .anx-google-wrap {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 8px;
+  }
+  /* Force the standard ("Continue with Google") variant to span the card. */
+  .anx-google-wrap > div[role="button"],
+  .anx-google-wrap > div > div[role="button"] { width: 100% !important; }
 
   /* Messages */
   .anx-msg-error { font-size: 13px; color: #e63329; background: rgba(230,51,41,0.06); padding: 8px 12px; border-radius: 8px; }
