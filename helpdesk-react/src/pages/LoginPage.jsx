@@ -64,8 +64,21 @@ const css = `
   .anx-left-foot { font-size: 11px; color: rgba(255,255,255,0.2); }
 
   /* ── Right light panel ─────────────────────────────────────────── */
-  .anx-right { flex: 1; background: #f8fafc; display: flex; flex-direction: column; padding: 28px 48px 40px; overflow-y: auto; }
-  .anx-right-content { width: 100%; max-width: 400px; margin: 40px auto 0; }
+  /* The right side holds a white "card" container so the form has a clear
+     visual boundary (instead of floating against the background). */
+  .anx-right {
+    flex: 1; background: #f1f5f9;
+    display: flex; align-items: center; justify-content: center;
+    padding: 40px 32px; overflow-y: auto;
+  }
+  .anx-right-content {
+    width: 100%; max-width: 440px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.04), 0 18px 50px rgba(0,0,0,0.08);
+    padding: 40px 36px;
+  }
   .anx-app-badge { width: 48px; height: 48px; border-radius: 13px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; background: #CC3A3A; color: #fff; font-size: 12px; font-weight: 700; letter-spacing: 0.3px; }
   .anx-right-title { font-size: 26px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px; margin-bottom: 4px; }
   .anx-right-sub { font-size: 14px; color: #64748b; margin-bottom: 28px; }
@@ -133,8 +146,8 @@ const css = `
     .anx-left { width: 100%; padding: 28px 24px 24px; }
     .anx-left-bottom { display: none; }
     .anx-app-name { font-size: 20px; }
-    .anx-right { padding: 24px 20px 36px; }
-    .anx-right-content { margin-top: 0; max-width: 100%; }
+    .anx-right { padding: 24px 16px 36px; align-items: stretch; }
+    .anx-right-content { max-width: 100%; padding: 28px 22px; border-radius: 16px; }
   }
 `;
 
