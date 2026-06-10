@@ -19,7 +19,7 @@ const APP_CONFIG = {
   suiteLinks: {
     HR:         'https://nxtpeople.altiusnxt.tech',
     LMS:        'https://lms.altiusnxt.tech/login',
-    Billing:    'http://72.61.245.208:5000/login',
+    Billing:    'https://nxtbilling.altiusnxt.tech/login',
     Helpdesk:   'https://tickets.altiusnxt.tech/login',
     Assessment: 'https://assess.altiusnxt.tech',
     Reports:    'https://ur.altiusnxt.tech',
