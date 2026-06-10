@@ -83,10 +83,9 @@ const css = `
   .anx-right-title { font-size: 26px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px; margin-bottom: 4px; }
   .anx-right-sub { font-size: 14px; color: #64748b; margin-bottom: 28px; }
 
-  /* Pills */
-  .anx-pills { display: flex; gap: 4px; background: #f1f5f9; border-radius: 10px; padding: 4px; margin-bottom: 24px; }
-  .anx-pill { flex: 1; padding: 8px 12px; font-size: 13px; font-weight: 500; color: #64748b; background: none; border: none; border-radius: 7px; cursor: pointer; font-family: inherit; transition: background .15s, color .15s, box-shadow .15s; }
-  .anx-pill.active { background: #fff; color: #0f172a; font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.10); }
+  /* "or" divider between Send OTP and Continue with Google */
+  .anx-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0 14px; color: #94a3b8; font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.6px; }
+  .anx-divider::before, .anx-divider::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
 
   /* Form */
   .anx-form { display: flex; flex-direction: column; gap: 16px; }
@@ -160,9 +159,6 @@ const CHECK_ICON = (
 export default function LoginPage() {
   const { login } = useApp();
   const navigate  = useNavigate();
-
-  // Which method tab is active: 'otp' | 'google'
-  const [method, setMethod] = useState('otp');
 
   // OTP flow state: 'email' | 'otp'
   const [step, setStep]           = useState('email');
@@ -331,12 +327,6 @@ export default function LoginPage() {
     setError(''); setSuccess(''); setDevCode('');
   };
 
-  // Switching tabs clears any in-flight error/success so the UI feels fresh
-  const switchMethod = (m) => {
-    setMethod(m);
-    setError(''); setSuccess('');
-  };
-
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <style>{css}</style>
@@ -394,97 +384,30 @@ export default function LoginPage() {
             <h1 className="anx-right-title">Sign In</h1>
             <p className="anx-right-sub">Access {APP_CONFIG.appName}</p>
 
-            {/* Method pills */}
-            <div className="anx-pills" role="tablist">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={method === 'otp'}
-                className={`anx-pill ${method === 'otp' ? 'active' : ''}`}
-                onClick={() => switchMethod('otp')}
-              >
-                Email OTP
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={method === 'google'}
-                className={`anx-pill ${method === 'google' ? 'active' : ''}`}
-                onClick={() => switchMethod('google')}
-              >
-                Google SSO
-              </button>
-            </div>
-
-            {/* ── OTP view ── */}
-            {method === 'otp' && (
+            {/* ── Step 1 — email form + Google button stacked ── */}
+            {step === 'email' && (
               <>
-                {step === 'email' && (
-                  <form className="anx-form" onSubmit={(e) => { e.preventDefault(); handleSendCode(); }}>
-                    <div className="anx-field">
-                      <label className="anx-label" htmlFor="anx-email">Work Email</label>
-                      <input
-                        id="anx-email"
-                        className="anx-input"
-                        type="email"
-                        placeholder="you@altiusnxt.com"
-                        autoComplete="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                      />
-                    </div>
-                    {error && <div className="anx-msg-error">{error}</div>}
-                    <button type="submit" className="anx-submit" disabled={loading}>
-                      {loading ? <span className="spinner-sm" /> : 'Send OTP'}
-                    </button>
-                  </form>
-                )}
+                <form className="anx-form" onSubmit={(e) => { e.preventDefault(); handleSendCode(); }}>
+                  <div className="anx-field">
+                    <label className="anx-label" htmlFor="anx-email">Work Email</label>
+                    <input
+                      id="anx-email"
+                      className="anx-input"
+                      type="email"
+                      placeholder="you@altiusnxt.com"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                  {error && <div className="anx-msg-error">{error}</div>}
+                  <button type="submit" className="anx-submit" disabled={loading}>
+                    {loading ? <span className="spinner-sm" /> : 'Send OTP'}
+                  </button>
+                </form>
 
-                {step === 'otp' && (
-                  <form className="anx-form" onSubmit={(e) => { e.preventDefault(); handleVerify(); }}>
-                    {success && <div className="anx-msg-success">{success}</div>}
-                    {devCode && <div className="anx-dev-code">Dev OTP: <strong>{devCode}</strong></div>}
-
-                    <div className="anx-field">
-                      <label className="anx-label">Enter the 6-digit code</label>
-                      <div className="anx-otp-grid">
-                        {otpDigits.map((d, i) => (
-                          <input
-                            key={i}
-                            id={`otp-${i}`}
-                            className="anx-otp-input"
-                            type="text"
-                            inputMode="numeric"
-                            maxLength={1}
-                            value={d}
-                            onChange={(e) => handleOtpChange(e.target.value, i)}
-                            onKeyDown={(e) => handleOtpKeyDown(e, i)}
-                            autoComplete={i === 0 ? 'one-time-code' : 'off'}
-                            autoFocus={i === 0}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    {error && <div className="anx-msg-error">{error}</div>}
-
-                    <button type="submit" className="anx-submit" disabled={loading}>
-                      {loading ? <span className="spinner-sm" /> : 'Verify & Sign In'}
-                    </button>
-                    <button type="button" className="anx-resend" onClick={resetToEmail}>
-                      ← Change email / Resend OTP
-                    </button>
-                  </form>
-                )}
-              </>
-            )}
-
-            {/* ── Google view ── */}
-            {method === 'google' && (
-              <>
-                <p className="anx-google-hint">
-                  Sign in securely using your Google Workspace account.
-                </p>
+                {/* "or" divider — then Google sign-in as the alternate method */}
+                <div className="anx-divider">or</div>
                 <div className="anx-google-wrap">
                   <GoogleLogin
                     onSuccess={handleGoogleSuccess}
@@ -495,8 +418,45 @@ export default function LoginPage() {
                     width="100%"
                   />
                 </div>
-                {error && <div className="anx-msg-error" style={{ marginTop: 12 }}>{error}</div>}
               </>
+            )}
+
+            {/* ── Step 2 — OTP code entry (Google hidden during this step) ── */}
+            {step === 'otp' && (
+              <form className="anx-form" onSubmit={(e) => { e.preventDefault(); handleVerify(); }}>
+                {success && <div className="anx-msg-success">{success}</div>}
+                {devCode && <div className="anx-dev-code">Dev OTP: <strong>{devCode}</strong></div>}
+
+                <div className="anx-field">
+                  <label className="anx-label">Enter the 6-digit code</label>
+                  <div className="anx-otp-grid">
+                    {otpDigits.map((d, i) => (
+                      <input
+                        key={i}
+                        id={`otp-${i}`}
+                        className="anx-otp-input"
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={d}
+                        onChange={(e) => handleOtpChange(e.target.value, i)}
+                        onKeyDown={(e) => handleOtpKeyDown(e, i)}
+                        autoComplete={i === 0 ? 'one-time-code' : 'off'}
+                        autoFocus={i === 0}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {error && <div className="anx-msg-error">{error}</div>}
+
+                <button type="submit" className="anx-submit" disabled={loading}>
+                  {loading ? <span className="spinner-sm" /> : 'Verify & Sign In'}
+                </button>
+                <button type="button" className="anx-resend" onClick={resetToEmail}>
+                  ← Change email / Resend OTP
+                </button>
+              </form>
             )}
 
             <div className="anx-right-foot">
