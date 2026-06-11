@@ -221,6 +221,23 @@ export function AppProvider({ children }) {
     }
   };
 
+  // Update an existing employee's editable fields (name/phone/designation/dept/
+  // division/organization). Email + id + role + status are NOT changed here.
+  const updateEmployee = async (userId, payload) => {
+    try {
+      const res = await fetch(`${API}/users/${encodeURIComponent(userId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) return { ok: false, error: data.error || 'Failed to update employee' };
+      return { ok: true, user: data };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  };
+
   const triggerZohoSync = async () => {
     try {
       const res = await fetch(`${API}/zoho/sync`, { method: 'POST' });
@@ -357,7 +374,7 @@ export function AppProvider({ children }) {
       addMessage, setStatus, assignTicket, setResolution,
       getMyTickets, updatePriority, refreshTickets: fetchTickets,
       fetchMyAssets, fetchAllAllocations, fetchAllAssets,
-      fetchEmployees, addEmployee, setUserStatus, triggerZohoSync, updateProfile,
+      fetchEmployees, addEmployee, updateEmployee, setUserStatus, triggerZohoSync, updateProfile,
       fetchNotifications, markNotifRead, markAllNotifRead,
     }}>
       {children}

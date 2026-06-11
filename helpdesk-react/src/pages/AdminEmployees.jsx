@@ -62,7 +62,7 @@ const ADMIN_PROTECTED_EMAILS = new Set([
 ]);
 
 export default function AdminEmployees() {
-  const { tickets, fetchEmployees, fetchAllAllocations, addEmployee, setUserStatus, triggerZohoSync } = useApp();
+  const { tickets, fetchEmployees, fetchAllAllocations, addEmployee, updateEmployee, setUserStatus, triggerZohoSync } = useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const focusId = searchParams.get('focus');
@@ -72,6 +72,8 @@ export default function AdminEmployees() {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState({});       // { [userId]: true }
   const [modalOpen, setModalOpen] = useState(false);
+  // The user object being edited; null = edit modal closed.
+  const [editingUser, setEditingUser] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [highlightId, setHighlightId] = useState(null);  // briefly tint the focused row
 
@@ -329,6 +331,7 @@ export default function AdminEmployees() {
                 rowRef={(el) => { if (el) rowRefs.current[u.id] = el; }}
                 onToggle={() => setExpanded(prev => ({ ...prev, [u.id]: !prev[u.id] }))}
                 onTicketClick={(tid) => navigate(`/admin/tickets/${tid}`)}
+                onEdit={() => setEditingUser(u)}
                 onToggleStatus={async () => {
                   const targetStatus = (u.status === 'inactive') ? 'active' : 'inactive';
                   const verb = targetStatus === 'inactive'
@@ -370,13 +373,31 @@ export default function AdminEmployees() {
           }}
         />
       )}
+
+      {/* EDIT EMPLOYEE MODAL */}
+      {editingUser && (
+        <EditEmployeeModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onSubmit={async (payload) => {
+            const result = await updateEmployee(editingUser.id, payload);
+            if (result.ok) {
+              showToast(`${payload.name || editingUser.name} updated`, 'success');
+              setEditingUser(null);
+              await reload();
+            } else {
+              showToast(result.error || 'Failed to update employee', 'error');
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ EMPLOYEE CARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-function EmployeeCard({ user, assets, tickets, openCount, expanded, isProtected, isHighlighted, rowRef, onToggle, onTicketClick, onToggleStatus }) {
+function EmployeeCard({ user, assets, tickets, openCount, expanded, isProtected, isHighlighted, rowRef, onToggle, onTicketClick, onToggleStatus, onEdit }) {
   const initials = user.avatar || (user.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
   const isInactive = user.status === 'inactive';
 
@@ -621,35 +642,52 @@ function EmployeeCard({ user, assets, tickets, openCount, expanded, isProtected,
           {/* ACCOUNT ACTIONS */}
           <div style={{ marginTop: 24 }}>
             <SectionHeader icon="manage_accounts" label="Account Actions" count={null} />
-            {isProtected ? (
-              <div style={{
-                background: 'var(--white)', border: '1px solid var(--slate)', borderRadius: 8,
-                padding: '12px 16px', fontSize: 12, color: 'var(--text-muted)',
-                display: 'flex', alignItems: 'center', gap: 8,
-              }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 16, color: NAVY }}>shield</span>
-                Protected admin account — cannot be deactivated from the UI.
-              </div>
-            ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              {/* Edit button — opens the edit modal pre-filled with this user */}
               <button
-                onClick={(e) => { e.stopPropagation(); onToggleStatus(); }}
+                onClick={(e) => { e.stopPropagation(); onEdit(); }}
                 style={{
                   padding: '10px 18px', borderRadius: 8,
                   fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                  border: 'none', color: '#fff',
-                  background: isInactive ? GREEN : AMBER,
-                  boxShadow: isInactive
-                    ? '0 4px 12px rgba(22,163,74,0.25)'
-                    : '0 4px 12px rgba(245,158,11,0.25)',
+                  border: '1px solid var(--slate)', color: NAVY,
+                  background: 'var(--white)',
                   display: 'inline-flex', alignItems: 'center', gap: 8,
                 }}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-                  {isInactive ? 'check_circle' : 'block'}
-                </span>
-                {isInactive ? 'Set Active' : 'Set Inactive'}
+                <span className="material-symbols-outlined" style={{ fontSize: 18, color: NAVY }}>edit</span>
+                Edit Employee
               </button>
-            )}
+
+              {isProtected ? (
+                <div style={{
+                  background: 'var(--white)', border: '1px solid var(--slate)', borderRadius: 8,
+                  padding: '10px 16px', fontSize: 12, color: 'var(--text-muted)',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 16, color: NAVY }}>shield</span>
+                  Protected admin account — cannot be deactivated from the UI.
+                </div>
+              ) : (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggleStatus(); }}
+                  style={{
+                    padding: '10px 18px', borderRadius: 8,
+                    fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                    border: 'none', color: '#fff',
+                    background: isInactive ? GREEN : AMBER,
+                    boxShadow: isInactive
+                      ? '0 4px 12px rgba(22,163,74,0.25)'
+                      : '0 4px 12px rgba(245,158,11,0.25)',
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                    {isInactive ? 'check_circle' : 'block'}
+                  </span>
+                  {isInactive ? 'Set Active' : 'Set Inactive'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -781,6 +819,152 @@ function AddEmployeeModal({ onClose, onSubmit }) {
   );
 }
 
+/* ─────────────── EDIT EMPLOYEE MODAL ─────────────── */
+function EditEmployeeModal({ user, onClose, onSubmit }) {
+  const [form, setForm] = useState({
+    name:         user.name || '',
+    phone:        user.phone || '',
+    designation:  user.designation || '',
+    dept:         user.dept || '',
+    division:     user.division || '',
+    organization: user.organization || '',
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
+  const canSubmit = form.name.trim().length > 0;
+  const isZoho = (user.source || '').toLowerCase() === 'zoho';
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    await onSubmit(form);
+    setSubmitting(false);
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(2, 23, 46, 0.6)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 1000, padding: 16,
+        animation: 'fadeIn 0.18s ease',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'var(--white)', borderRadius: 16,
+          width: '100%', maxWidth: 600, maxHeight: '90vh', overflow: 'auto',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          padding: '20px 24px', borderBottom: '1px solid var(--slate)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10, background: 'rgba(204,58,58,0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <span className="material-symbols-outlined" style={{ color: RED }}>edit</span>
+            </div>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: NAVY, fontFamily: 'DM Sans, sans-serif' }}>
+                Edit Employee
+              </h2>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                Update {user.name}'s details
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            background: 'transparent', border: 'none', cursor: 'pointer', padding: 4,
+          }}>
+            <span className="material-symbols-outlined" style={{ color: 'var(--text-muted)' }}>close</span>
+          </button>
+        </div>
+
+        {/* Zoho warning banner */}
+        {isZoho && (
+          <div style={{
+            margin: '16px 24px 0', padding: '10px 14px',
+            background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8,
+            display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 12, color: '#92400e',
+          }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 18, color: AMBER, flexShrink: 0 }}>warning</span>
+            <span>
+              This employee is synced from Zoho. Name, job role, department, and phone may be
+              <strong> overwritten on the next hourly Zoho sync</strong>. Use this to override
+              only when Zoho data is incorrect.
+            </span>
+          </div>
+        )}
+
+        {/* Body */}
+        <div style={{ padding: 24, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <Field label="Full Name" required full>
+            <Input value={form.name} onChange={v => setField('name', v)} placeholder="e.g. Prabakaran" />
+          </Field>
+          <Field label="Employee ID">
+            <Input value={user.id} disabled />
+          </Field>
+          <Field label="Email">
+            <Input value={user.email} disabled />
+          </Field>
+          <Field label="Phone (optional)">
+            <Input value={form.phone} onChange={v => setField('phone', v)} placeholder="+91 98765 43210" />
+          </Field>
+          <Field label="Job Role" full>
+            <Select value={form.designation} onChange={v => setField('designation', v)} placeholder="Select job role" options={JOB_ROLES} />
+          </Field>
+          <Field label="Department">
+            <Input value={form.dept} onChange={v => setField('dept', v)} placeholder="e.g. IT, HR, Finance" />
+          </Field>
+          <Field label="Division">
+            <Select value={form.division} onChange={v => setField('division', v)} placeholder="Select division" options={DIVISIONS} />
+          </Field>
+          <Field label="Organization">
+            <Select value={form.organization} onChange={v => setField('organization', v)} placeholder="Select organization" options={ORGANIZATIONS} />
+          </Field>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: '16px 24px', borderTop: '1px solid var(--slate)',
+          display: 'flex', justifyContent: 'flex-end', gap: 10,
+        }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '10px 18px', border: '1px solid var(--slate)', background: 'var(--white)',
+              color: NAVY, borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            disabled={!canSubmit || submitting}
+            onClick={handleSubmit}
+            style={{
+              padding: '10px 22px', border: 'none',
+              background: canSubmit && !submitting ? RED : '#cbd5e1',
+              color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 700,
+              cursor: canSubmit && !submitting ? 'pointer' : 'not-allowed',
+              boxShadow: canSubmit && !submitting ? '0 4px 12px rgba(204,58,58,0.25)' : 'none',
+            }}
+          >
+            {submitting ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Select({ value, onChange, placeholder, options }) {
   return (
     <select
@@ -814,17 +998,21 @@ function Field({ label, required, full, children }) {
   );
 }
 
-function Input({ value, onChange, placeholder, type = 'text' }) {
+function Input({ value, onChange, placeholder, type = 'text', disabled = false }) {
   return (
     <input
       type={type}
-      value={value}
+      value={value || ''}
       placeholder={placeholder}
-      onChange={e => onChange(e.target.value)}
+      disabled={disabled}
+      onChange={e => onChange && onChange(e.target.value)}
       style={{
         width: '100%', padding: '10px 12px',
         border: '1px solid var(--slate)', borderRadius: 8,
-        fontSize: 13, outline: 'none', background: 'var(--white)', color: 'var(--text-primary)',
+        fontSize: 13, outline: 'none',
+        background: disabled ? '#f1f5f9' : 'var(--white)',
+        color: disabled ? 'var(--text-muted)' : 'var(--text-primary)',
+        cursor: disabled ? 'not-allowed' : 'text',
       }}
     />
   );
