@@ -37,9 +37,11 @@ function mapDbNotif(n) {
 
   const time = new Date(n.created_at);
   const isToday = bucketOf(n.created_at) === 'today';
+  // Force IST so notifications match the wall clock at the India office,
+  // regardless of the viewer's browser/OS timezone.
   const timeText = isToday
-    ? `Today, ${time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
-    : time.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    ? `Today, ${time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}`
+    : time.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
 
   return {
     id: n.id,

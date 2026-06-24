@@ -5,6 +5,25 @@ const AppContext = createContext(null);
 const API = '/api';
 const FILE_BASE = '';
 
+// Format a timestamp in Indian Standard Time, regardless of the user's
+// browser/OS timezone. We're an India-based app — all conversation, ticket
+// and notification timestamps should match what an admin in India sees on
+// their wall clock, so a client in Dubai (or with a misconfigured PC clock)
+// doesn't see times shifted by hours.
+export const formatIST = (input) => {
+  if (!input) return '';
+  try {
+    return new Date(input).toLocaleString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata',
+    });
+  } catch {
+    return String(input);
+  }
+};
+
 export function AppProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('nxt_session');
@@ -336,21 +355,21 @@ export function AppProvider({ children }) {
     desc: t.description,
     preferredTime: t.preferred_time,
     deviceNotes: t.device_notes,
-    createdAt: t.created_at ? new Date(t.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
-    updatedAt: t.updated_at ? new Date(t.updated_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
-    resolvedAt: t.resolved_at ? new Date(t.resolved_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null,
-    inProgressAt: t.in_progress_at ? new Date(t.in_progress_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null,
+    createdAt:    formatIST(t.created_at),
+    updatedAt:    formatIST(t.updated_at),
+    resolvedAt:   t.resolved_at    ? formatIST(t.resolved_at)    : null,
+    inProgressAt: t.in_progress_at ? formatIST(t.in_progress_at) : null,
     assignedTo: t.assigned_to,
     resolutionNote: t.resolution_note,
     messages: (t.messages || []).map(m => ({
       from: m.sender_role,
       name: m.sender_name,
       text: m.message,
-      time: m.sent_at ? new Date(m.sent_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+      time: formatIST(m.sent_at),
     })),
     history: (t.history || []).map(h => ({
       label: h.action_label,
-      time: h.action_time ? new Date(h.action_time).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+      time: formatIST(h.action_time),
     })),
     attachments: (t.attachments || []).map(a => ({
       id: a.id,

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
+import { useApp, formatIST } from '../context/AppContext';
 import { Modal } from '../components/Modal';
 import { showToast } from '../components/Toast';
 
@@ -86,7 +86,9 @@ export default function AdminTicketDetail() {
   /* â”€â”€ Actions â”€â”€ */
   const sendReply = () => {
     if (!reply.trim()) { showToast('Type a message first', 'error'); return; }
-    addMessage(t.id, { from: 'admin', name: currentUser?.name || 'Admin', time: 'Just now', text: reply });
+    // Show the real IST timestamp on the optimistic bubble — if fetchTickets
+    // glitches, the user still sees a real time instead of "Just now" stuck.
+    addMessage(t.id, { from: 'admin', name: currentUser?.name || 'Admin', time: formatIST(new Date()), text: reply });
     setReply('');
     showToast('Reply sent', 'success');
   };

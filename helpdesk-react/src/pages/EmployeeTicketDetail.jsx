@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
+import { useApp, formatIST } from '../context/AppContext';
 import { showToast } from '../components/Toast';
 
 const RED   = '#CC3A3A';
@@ -58,14 +58,14 @@ export default function EmployeeTicketDetail() {
 
   const sendReply = () => {
     if (!reply.trim()) { showToast('Type a message first', 'error'); return; }
-    addMessage(t.id, { from: 'employee', name: currentUser.name, time: 'Just now', text: reply });
+    addMessage(t.id, { from: 'employee', name: currentUser.name, time: formatIST(new Date()), text: reply });
     setReply('');
     showToast('Reply sent', 'success');
   };
 
   const handleReopen = () => {
     setStatus(t.id, 'reopened');
-    addMessage(t.id, { from: 'employee', name: currentUser.name, time: 'Just now', text: 'Ticket reopened by employee.' });
+    addMessage(t.id, { from: 'employee', name: currentUser.name, time: formatIST(new Date()), text: 'Ticket reopened by employee.' });
     showToast('Ticket reopened', 'success');
   };
 
