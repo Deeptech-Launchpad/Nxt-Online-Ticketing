@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { showToast } from '../components/Toast';
@@ -76,6 +76,12 @@ export default function RaiseTicket() {
 
   const [step, setStep] = useState(1);
   const [success, setSuccess] = useState(null);
+  // Guards against duplicate ticket creation when admin double-clicks Submit
+  // or the browser/network retries the POST. The ref blocks reentry
+  // synchronously; the state drives the button's disabled + "Submitting..."
+  // visual so the user knows the click registered.
+  const submittingRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // Step 1
   const [subject, setSubject]   = useState('');
@@ -151,23 +157,34 @@ export default function RaiseTicket() {
   };
 
   const handleSubmit = async () => {
-    const id = await submitTicket({
-      division: currentUser?.division || '',
-      category,
-      subject,
-      desc,
-      priority,
-      device: selectedDevice ? `${selectedDevice.name} (${selectedDevice.id})` : '',
-      remote,
-      preferredTime: timeSlot,
-      deviceNotes,
-      attachmentFile,
-    }, currentUser);
+    // Block double-fire (fast double-click, browser retry, etc.). The ref is
+    // synchronous so a second click landing in the same event-batch as the
+    // first is rejected immediately — preventing duplicate tickets.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const id = await submitTicket({
+        division: currentUser?.division || '',
+        category,
+        subject,
+        desc,
+        priority,
+        device: selectedDevice ? `${selectedDevice.name} (${selectedDevice.id})` : '',
+        remote,
+        preferredTime: timeSlot,
+        deviceNotes,
+        attachmentFile,
+      }, currentUser);
 
-    if (id) {
-      setSuccess(id);
-    } else {
-      showToast('Failed to submit ticket. Please try again.', 'error');
+      if (id) {
+        setSuccess(id);
+      } else {
+        showToast('Failed to submit ticket. Please try again.', 'error');
+      }
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   };
 
@@ -230,6 +247,7 @@ export default function RaiseTicket() {
             device={selectedDevice} remote={remote} timeSlot={timeSlot}
             goStep={goStep}
             onSubmit={handleSubmit}
+            submitting={submitting}
           />
         )}
       </div>
@@ -441,7 +459,7 @@ function Step3({ remote, setRemote, timeSlot, setTimeSlot, onBack, onNext }) {
 }
 
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ STEP 4 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-function Step4({ subject, category, priority, desc, device, remote, timeSlot, goStep, onSubmit }) {
+function Step4({ subject, category, priority, desc, device, remote, timeSlot, goStep, onSubmit, submitting }) {
   return (
     <>
       <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 20, color: 'var(--text-primary)' }}>
@@ -507,8 +525,16 @@ function Step4({ subject, category, priority, desc, device, remote, timeSlot, go
         <button onClick={() => goStep(3)} style={{ ...outlineButtonStyle, flex: 1 }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_back</span> Back
         </button>
-        <button onClick={onSubmit} style={{ ...primaryButtonStyle, flex: 2, marginTop: 0 }}>
-          Submit Ticket
+        <button
+          onClick={onSubmit}
+          disabled={submitting}
+          style={{
+            ...primaryButtonStyle, flex: 2, marginTop: 0,
+            opacity: submitting ? 0.65 : 1,
+            cursor: submitting ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {submitting ? 'Submitting...' : 'Submit Ticket'}
         </button>
       </div>
     </>
