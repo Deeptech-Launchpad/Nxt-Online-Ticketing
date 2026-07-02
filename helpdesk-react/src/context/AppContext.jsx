@@ -10,10 +10,24 @@ const FILE_BASE = '';
 // and notification timestamps should match what an admin in India sees on
 // their wall clock, so a client in Dubai (or with a misconfigured PC clock)
 // doesn't see times shifted by hours.
+//
+// Timestamps arrive from the backend in TWO shapes:
+//   1. `"2026-07-02T07:01:00.000Z"` — for top-level ticket columns, added
+//      automatically by the pg driver → Express JSON serialization. Correctly
+//      parsed as UTC by `new Date(...)`.
+//   2. `"2026-07-02T07:01:00"`     — for nested message/history rows built
+//      via SQL `json_agg(row_to_json(m))`. These are NAIVE strings with no
+//      timezone info. `new Date(...)` treats them as browser-local time,
+//      which shifts the display by the browser's UTC offset. We defensively
+//      append 'Z' below so both shapes parse consistently as UTC.
 export const formatIST = (input) => {
   if (!input) return '';
   try {
-    return new Date(input).toLocaleString('en-IN', {
+    let raw = input;
+    if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(raw)) {
+      raw = raw + 'Z';
+    }
+    return new Date(raw).toLocaleString('en-IN', {
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
       hour12: true,
