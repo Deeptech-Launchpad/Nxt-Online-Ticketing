@@ -10,12 +10,22 @@ const AMBER = '#F59E0B';
 const BLUE  = '#0EA5E9';
 
 /* Group notification by date bucket */
+// Group a notification into today / yesterday / week using IST midnight as the
+// boundary, so a late-night notification from India doesn't land under
+// "Yesterday" for a viewer whose PC clock is UTC.
+function istDayStart(anchor) {
+  const yyyy = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(anchor);
+  return new Date(`${yyyy}T00:00:00+05:30`).getTime();
+}
 function bucketOf(createdAt) {
   if (!createdAt) return 'week';
-  const d = new Date(createdAt);
+  let raw = createdAt;
+  if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(raw)) raw += 'Z';
+  const d = new Date(raw).getTime();
   const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfYesterday = new Date(startOfToday); startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  const startOfToday = istDayStart(now);
+  const startOfYesterday = startOfToday - 86400 * 1000;
   if (d >= startOfToday)     return 'today';
   if (d >= startOfYesterday) return 'yesterday';
   return 'week';
@@ -35,7 +45,13 @@ function mapDbNotif(n) {
     icon = 'settings'; iconBg = '#fdf4ff'; iconColor = '#9333ea';
   }
 
-  const time = new Date(n.created_at);
+  // Handle naive Postgres timestamps (no 'Z'): treat them as UTC to match how
+  // the top-level ticket columns are already handled by the pg driver.
+  let rawCreated = n.created_at;
+  if (typeof rawCreated === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(rawCreated)) {
+    rawCreated += 'Z';
+  }
+  const time = new Date(rawCreated);
   const isToday = bucketOf(n.created_at) === 'today';
   // Force IST so notifications match the wall clock at the India office,
   // regardless of the viewer's browser/OS timezone.

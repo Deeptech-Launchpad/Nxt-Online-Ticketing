@@ -38,6 +38,42 @@ export const formatIST = (input) => {
   }
 };
 
+// Same rules as formatIST, but shows the date only (no hh:mm). Used for
+// asset dates, ticket-list "Date" columns, allocation history, etc. —
+// anywhere we want a compact date like "27 Jun 2026" always in IST.
+export const formatISTDate = (input) => {
+  if (!input) return '';
+  try {
+    let raw = input;
+    if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(raw)) {
+      raw = raw + 'Z';
+    }
+    return new Date(raw).toLocaleDateString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      timeZone: 'Asia/Kolkata',
+    });
+  } catch {
+    return String(input);
+  }
+};
+
+// Millisecond timestamp of a given date **anchored to IST**, i.e. the moment
+// that IST midnight (00:00) of that IST date fell on the world clock. Used
+// for report-bucket math so tickets created near IST midnight fall into the
+// correct IST day, regardless of the viewer's browser timezone.
+export const istDayStart = (input) => {
+  if (!input) return NaN;
+  let raw = input;
+  if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(raw)) {
+    raw = raw + 'Z';
+  }
+  const d = new Date(raw);
+  // Compose "YYYY-MM-DDT00:00:00+05:30" for the same *IST* date, then parse.
+  const yyyy = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(d);
+  return new Date(`${yyyy}T00:00:00+05:30`).getTime();
+};
+
 export function AppProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('nxt_session');
@@ -373,6 +409,12 @@ export function AppProvider({ children }) {
     updatedAt:    formatIST(t.updated_at),
     resolvedAt:   t.resolved_at    ? formatIST(t.resolved_at)    : null,
     inProgressAt: t.in_progress_at ? formatIST(t.in_progress_at) : null,
+    // Raw ISO strings — used by list/report code that needs to bucket by day
+    // (or re-format to date-only) without re-parsing the IST-formatted string.
+    createdAtRaw:    t.created_at    || null,
+    updatedAtRaw:    t.updated_at    || null,
+    resolvedAtRaw:   t.resolved_at   || null,
+    inProgressAtRaw: t.in_progress_at|| null,
     assignedTo: t.assigned_to,
     resolutionNote: t.resolution_note,
     messages: (t.messages || []).map(m => ({

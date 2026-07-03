@@ -24,17 +24,21 @@ const CAT_ICON = {
   Printer: 'print', 'Access / Login': 'lock', Other: 'more_horiz',
 };
 
-/* Pretty relative time */
+/* Pretty relative time. Accepts either a raw ISO from the backend or a legacy
+   formatted string. Naive Postgres timestamps get 'Z' appended so they're
+   treated as UTC (matches the formatIST helper's convention). */
 function relTime(iso) {
   if (!iso) return '';
-  const d = new Date(iso.replace(',', ''));
-  if (isNaN(d)) return iso;
+  let raw = iso;
+  if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(raw)) raw += 'Z';
+  const d = new Date(typeof raw === 'string' ? raw.replace(',', '') : raw);
+  if (isNaN(d)) return String(iso);
   const diff = Math.floor((Date.now() - d.getTime()) / 1000);
   if (diff < 60)        return `${diff}s ago`;
   if (diff < 3600)      return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400)     return `${Math.floor(diff / 3600)}h ago`;
   if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d ago`;
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
 }
 
 export default function AdminDashboard() {
@@ -80,7 +84,7 @@ export default function AdminDashboard() {
     showToast(`Claimed ${t.id}`, 'success');
   };
 
-  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' });
 
   return (
     <div style={{ animation: 'fadeIn 0.3s ease' }}>
@@ -115,7 +119,7 @@ export default function AdminDashboard() {
                 <span style={{ background: RED, color: '#fff', fontSize: 9, padding: '2px 6px', borderRadius: 4 }}>HIGH RISK</span>
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                {criticalTicket.employeeName} - <strong>{criticalTicket.subject}</strong> · created {relTime(criticalTicket.createdAt)}
+                {criticalTicket.employeeName} - <strong>{criticalTicket.subject}</strong> · created {relTime(criticalTicket.createdAtRaw || criticalTicket.createdAt)}
               </div>
             </div>
           </div>
@@ -429,7 +433,7 @@ function FeedRow({ ticket, onView, onClaim }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
           <span style={{ fontWeight: 700, fontSize: 14, color: NAVY }}>{ticket.employeeName || 'Unknown'}</span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{relTime(ticket.createdAt)}</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{relTime(ticket.createdAtRaw || ticket.createdAt)}</span>
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
           <span className="material-symbols-outlined" style={{ fontSize: 14, color: barColor }}>{catIcon}</span>

@@ -41,8 +41,14 @@ export default function AdminReports() {
     const startQuarter = getStartOfQuarter(now);
     
     return tickets.filter(t => {
-      // Parse dates like "2 Apr 2026, 8:50 AM" correctly
-      const tDate = new Date(t.createdAt).getTime();
+      // Prefer the raw ISO from the backend — parsing the pre-formatted
+      // string "2 Apr 2026, 8:50 am" back to a Date is browser-fragile
+      // and could bucket the ticket into the wrong week/month.
+      let raw = t.createdAtRaw || t.createdAt;
+      if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(raw)) {
+        raw += 'Z';
+      }
+      const tDate = new Date(raw).getTime();
       if (isNaN(tDate)) return true; // fallback
       if (timeFilter === 'This Week') return tDate >= startWeek;
       if (timeFilter === 'This Month') return tDate >= startMonth;

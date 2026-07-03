@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { formatISTDate } from '../context/AppContext';
 
 const DIVISIONS = ['Guntur -AndhraPradesh', 'RS Puram Coimbatore', 'Saibaba Colony-Coimbatore', 'Thudiyalur-coimbatore', 'WFH'];
 const ASSET_TYPES = ['Laptop', 'Desktop', 'Printer', 'Networking', 'Monitor', 'UPS', 'Phone', 'Other'];
@@ -445,12 +446,12 @@ export default function AssetMaster() {
       const ownedByUser = a.ownershipType === 'Personal' ? a.quantity : 0;
       return [
         a.id,
-        a.createdAt ? new Date(a.createdAt).toLocaleDateString() : 'N/A',
-        a.purchaseDate ? new Date(a.purchaseDate).toLocaleDateString() : 'N/A',
+        a.createdAt ? formatISTDate(a.createdAt) : 'N/A',
+        a.purchaseDate ? formatISTDate(a.purchaseDate) : 'N/A',
         a.type || '', a.name, a.brand, a.model || '', a.organization || 'N/A', a.ownershipType || 'Office Owned', a.division, a.serialNumber,
         a.quantity, spare, a.qtyInUse, a.qtyRepairing || 0, a.qtyScrap || 0,
         ownedByOffice, rented, ownedByUser, a.warrantyStatus,
-        a.warrantyExpiry ? new Date(a.warrantyExpiry).toLocaleDateString() : 'N/A'
+        a.warrantyExpiry ? formatISTDate(a.warrantyExpiry) : 'N/A'
       ];
     });
     
@@ -644,8 +645,8 @@ export default function AssetMaster() {
                   <input type="checkbox" checked={selectedIds.includes(asset.id)} onChange={() => toggleSelect(asset.id)} />
                 </td>
                 <td><span style={{ fontSize: 12.5, fontFamily: "'DM Mono',monospace", color: 'var(--blue)', fontWeight: 700 }}>{asset.id}</span></td>
-                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : '-'}</td>
-                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.purchaseDate ? new Date(asset.purchaseDate).toLocaleDateString() : '-'}</td>
+                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.createdAt ? formatISTDate(asset.createdAt) : '-'}</td>
+                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.purchaseDate ? formatISTDate(asset.purchaseDate) : '-'}</td>
                 <td style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>{asset.type || '-'}</td>
                 <td>
                   <div style={{ fontWeight: 600, color: 'var(--navy)', fontSize: 14 }}>{asset.name}</div>
@@ -680,7 +681,7 @@ export default function AssetMaster() {
                 <td style={{ textAlign: 'center', fontSize: 13, fontWeight: 600 }}>{asset.ownershipType === 'Rent' ? asset.quantity : 0}</td>
                 <td style={{ textAlign: 'center', fontSize: 13, fontWeight: 600 }}>{asset.ownershipType === 'Personal' ? asset.quantity : 0}</td>
                 <td><WarrantyBadge status={asset.warrantyStatus} /></td>
-                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.warrantyExpiry ? new Date(asset.warrantyExpiry).toLocaleDateString() : '-'}</td>
+                <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{asset.warrantyExpiry ? formatISTDate(asset.warrantyExpiry) : '-'}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <button className="action-btn-gray" title="Allocate/Return" onClick={(e) => { 
                     e.stopPropagation(); 
@@ -1143,7 +1144,7 @@ export default function AssetMaster() {
                             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{h.user_email || 'No email provided'}</div>
                           </td>
                           <td style={{ padding: '12px 8px', fontSize: 13 }}>
-                            {new Date(h.allocated_at).toLocaleDateString()}
+                            {formatISTDate(h.allocated_at)}
                           </td>
                           <td style={{ padding: '12px 8px' }}>
                             {h.returned_at ? (
@@ -1153,7 +1154,7 @@ export default function AssetMaster() {
                             )}
                           </td>
                           <td style={{ padding: '12px 8px', fontSize: 13, color: 'var(--text-muted)' }}>
-                            {h.returned_at ? new Date(h.returned_at).toLocaleDateString() : '-'}
+                            {h.returned_at ? formatISTDate(h.returned_at) : '-'}
                           </td>
                         </tr>
                       ))

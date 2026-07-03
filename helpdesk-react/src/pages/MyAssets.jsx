@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
+import { useApp, formatISTDate } from '../context/AppContext';
 
 const RED = '#CC3A3A';
 const NAVY = '#02172E';
@@ -18,7 +18,7 @@ function mapDbAsset(row, idx) {
     const days = (exp - today) / (1000 * 60 * 60 * 24);
     if (days < 0)       { warrantyStatus = 'expired';  warrantyText = 'Expired'; }
     else if (days < 60) { warrantyStatus = 'expiring'; warrantyText = 'Expiring Soon'; }
-    else                { warrantyStatus = 'valid';    warrantyText = `Valid till ${exp.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}`; }
+    else                { warrantyStatus = 'valid';    warrantyText = `Valid till ${exp.toLocaleDateString('en-IN', { month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' })}`; }
   }
   const health = row.health_percent ?? 100;
   let healthLabel = 'EXCELLENT', healthColor = GREEN;
@@ -39,7 +39,7 @@ function mapDbAsset(row, idx) {
     icon,
     primary:      row.is_primary || idx === 0,    // first allocated = primary if not flagged
     serialNumber: row.serial_number,
-    assignedDate: row.allocated_at ? new Date(row.allocated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-',
+    assignedDate: row.allocated_at ? formatISTDate(row.allocated_at) : '-',
     warranty:     warrantyText,
     warrantyStatus,
     condition:    row.condition || 'Good',

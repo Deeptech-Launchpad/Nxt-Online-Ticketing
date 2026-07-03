@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
+import { useApp, formatISTDate } from '../context/AppContext';
 import { showToast } from '../components/Toast';
 
 const RED   = '#CC3A3A';
@@ -118,8 +118,8 @@ export default function RaiseTicket() {
           name:      a.name,
           icon:      ASSET_TYPE_ICON[a.type] || 'devices_other',
           serial:    a.serial_number || 'N/A',
-          date:      a.allocated_at ? new Date(a.allocated_at).toLocaleDateString() : (a.purchase_date ? new Date(a.purchase_date).toLocaleDateString() : 'N/A'),
-          warranty:  a.warranty_expiry ? `Valid till ${new Date(a.warranty_expiry).toLocaleDateString()}` : (a.warranty_status || 'N/A'),
+          date:      a.allocated_at ? formatISTDate(a.allocated_at) : (a.purchase_date ? formatISTDate(a.purchase_date) : 'N/A'),
+          warranty:  a.warranty_expiry ? `Valid till ${formatISTDate(a.warranty_expiry)}` : (a.warranty_status || 'N/A'),
           condition: a.condition || 'Good',
         }));
         setMyAssets(mapped);

@@ -85,13 +85,18 @@ export default function EmployeeDashboard() {
 
   const myAssetsCount = myAssets.length;
 
-  // Greeting based on hour
-  const hour = new Date().getHours();
+  // Greeting based on hour (IST, so the greeting doesn't lie when the user's
+  // PC clock is misconfigured).
+  const hour = parseInt(
+    new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }),
+    10,
+  );
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const firstName = currentUser?.name?.split(' ')[0] || 'there';
 
-  // Today's date pretty
-  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  // Today's date pretty — anchored to IST so the greeting date doesn't shift
+  // for users with misconfigured PC timezones.
+  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' });
 
   // Recent tickets - top 3, newest first by id presence (already sorted from API)
   const recentTickets = mine.slice(0, 3);

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
+import { useApp, formatISTDate } from '../context/AppContext';
 import { showToast } from '../components/Toast';
 import { downloadCSV, todayStamp } from '../utils/csv';
 
@@ -24,15 +24,21 @@ const STATUS_PILL = {
   reopened:      { bg: '#ede9fe', color: '#6d28d9', border: '#ddd6fe', label: 'REOPENED' },
 };
 
+// Accepts either a raw ISO timestamp (from the backend) or the IST-formatted
+// string (legacy callers). Prefer passing the raw ISO — string re-parsing is
+// fragile across browsers.
 function relTime(iso) {
   if (!iso) return '';
-  const d = new Date(iso.replace(',', ''));
-  if (isNaN(d)) return iso;
+  let raw = iso;
+  // Naive Postgres timestamp (no 'Z') → treat as UTC.
+  if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(raw)) raw += 'Z';
+  const d = new Date(typeof raw === 'string' ? raw.replace(',', '') : raw);
+  if (isNaN(d)) return String(iso);
   const diff = Math.floor((Date.now() - d.getTime()) / 1000);
   if (diff < 60)        return `${diff}s ago`;
   if (diff < 3600)      return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400)     return `${Math.floor(diff / 3600)}h ago`;
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
 }
 
 export default function AdminTickets() {
@@ -177,7 +183,7 @@ export default function AdminTickets() {
                   </div>
                   <div style={{ fontSize: 11, color: RED, fontWeight: 600, marginTop: 2 }}>
                     <span className="material-symbols-outlined" style={{ fontSize: 12, verticalAlign: 'middle' }}>schedule</span>{' '}
-                    {relTime(t.createdAt)} elapsed · {t.division}
+                    {relTime(t.createdAtRaw || t.createdAt)} elapsed · {t.division}
                   </div>
                 </div>
                 <span style={{
@@ -358,7 +364,7 @@ function Row({ ticket, onView, onClaim, onReopen }) {
           {st.label}
         </span>
       </td>
-      <td style={tdStyle}>{ticket.createdAt?.split(',')[0] || '-'}</td>
+      <td style={tdStyle}>{ticket.createdAtRaw ? formatISTDate(ticket.createdAtRaw) : (ticket.createdAt?.split(',')[0] || '-')}</td>
       <td style={tdStyle}>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {/* Eye icon - always visible */}
