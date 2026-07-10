@@ -1,7 +1,49 @@
-﻿import { useState, useMemo } from 'react';
+﻿import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { downloadCSV, todayStamp } from '../utils/csv';
 import { showToast } from '../components/Toast';
+
+// Return the IST "YYYY-MM-DD" for a raw ISO timestamp. Uses Intl so it
+// doesn't depend on the viewer's browser timezone.
+const istYMD = (raw) => {
+  if (!raw) return '';
+  let s = raw;
+  if (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) s += 'Z';
+  try {
+    // 'en-CA' returns the ISO-friendly "YYYY-MM-DD" format.
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(s));
+  } catch { return ''; }
+};
+
+// Return the IST month label "Jun 2026" for a raw ISO timestamp.
+const istMonthLabel = (raw) => {
+  if (!raw) return '';
+  let s = raw;
+  if (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) s += 'Z';
+  try {
+    return new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      month: 'short', year: 'numeric',
+    }).format(new Date(s));
+  } catch { return ''; }
+};
+
+// Convert an IST YYYY-MM-DD string to a short label "27 Jun 2026" for
+// user-facing text (toasts, CSV filename).
+const istDateLabel = (ymd) => {
+  if (!ymd) return '';
+  const [y, m, d] = ymd.split('-');
+  if (!y || !m || !d) return ymd;
+  // Compose an IST-anchored instant and format.
+  const anchor = new Date(`${ymd}T00:00:00+05:30`);
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit', month: 'short', year: 'numeric',
+  }).format(anchor);
+};
 
 const DIVISIONS = ['Guntur -AndhraPradesh', 'RS Puram Coimbatore', 'Saibaba Colony-Coimbatore', 'Thudiyalur-coimbatore', 'WFH'];
 const CATEGORIES = ['Hardware', 'Software', 'Network', 'Access / Login', 'Email', 'Printer', 'Other'];
@@ -21,12 +63,33 @@ const CAT_ICONS = {
 export default function AdminReports() {
   const { tickets } = useApp();
   const [timeFilter, setTimeFilter] = useState('All Time');
+  // Custom pickers — take precedence over the preset tabs when set.
+  //   customDate  = "YYYY-MM-DD" (from <input type="date">)
+  //   customMonth = "YYYY-MM"    (from <input type="month">)
+  // Only ONE of them is ever active at a time.
+  const [customMonth, setCustomMonth] = useState('');
+  const [customDate,  setCustomDate]  = useState('');
+
+  // Clicking a preset chip clears any custom picker. Setting a custom picker
+  // clears the OTHER picker. This keeps exactly one filter mode active.
+  const pickPreset = (tf) => { setTimeFilter(tf); setCustomMonth(''); setCustomDate(''); };
+  const pickMonth  = (m)  => { setCustomMonth(m); setCustomDate(''); };
+  const pickDate   = (d)  => { setCustomDate(d);  setCustomMonth(''); };
 
   const filteredTickets = useMemo(() => {
+    // Custom date — highest priority
+    if (customDate) {
+      return tickets.filter(t => istYMD(t.createdAtRaw || t.createdAt) === customDate);
+    }
+    // Custom month
+    if (customMonth) {
+      return tickets.filter(t => (istYMD(t.createdAtRaw || t.createdAt) || '').startsWith(customMonth));
+    }
+    // Preset tabs (unchanged behavior)
     if (timeFilter === 'All Time') return tickets;
-    
+
     const now = new Date();
-    
+
     const getStartOfWeek = (d) => {
       const date = new Date(d);
       const day = date.getDay();
@@ -35,11 +98,11 @@ export default function AdminReports() {
     };
     const getStartOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1).getTime();
     const getStartOfQuarter = (d) => new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 1).getTime();
-    
+
     const startWeek = getStartOfWeek(now);
     const startMonth = getStartOfMonth(now);
     const startQuarter = getStartOfQuarter(now);
-    
+
     return tickets.filter(t => {
       // Prefer the raw ISO from the backend — parsing the pre-formatted
       // string "2 Apr 2026, 8:50 am" back to a Date is browser-fragile
@@ -55,7 +118,23 @@ export default function AdminReports() {
       if (timeFilter === 'This Quarter') return tDate >= startQuarter;
       return true;
     });
-  }, [tickets, timeFilter]);
+  }, [tickets, timeFilter, customMonth, customDate]);
+
+  // When a custom pick results in 0 tickets, tell the admin so they don't
+  // wonder why the KPI cards suddenly went blank.
+  useEffect(() => {
+    if (!customDate && !customMonth) return;
+    if (filteredTickets.length !== 0) return;
+    const label = customDate ? istDateLabel(customDate) : istMonthLabel(new Date(`${customMonth}-01T00:00:00+05:30`));
+    showToast(`No tickets found for ${label}`, 'info');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customDate, customMonth]);
+
+  // Human-readable label of the currently-active filter — used in CSV
+  // filename and in the CSV's Time Range row.
+  const activeLabel = customDate ? istDateLabel(customDate)
+    : customMonth ? istMonthLabel(new Date(`${customMonth}-01T00:00:00+05:30`))
+    : timeFilter;
 
   const divisionStats = DIVISIONS.map(b => ({ name: b, count: filteredTickets.filter(t => t.division === b).length }));
   const catStats = CATEGORIES.map((c, i) => ({
@@ -80,7 +159,7 @@ export default function AdminReports() {
 
     // Section 1: Summary KPIs
     sections.push({ Section: 'SUMMARY KPIS', Metric: '', Value: '', Detail: '' });
-    sections.push({ Section: '', Metric: 'Time Range',     Value: timeFilter,                 Detail: '' });
+    sections.push({ Section: '', Metric: 'Time Range',     Value: activeLabel,               Detail: '' });
     sections.push({ Section: '', Metric: 'Total Tickets',  Value: totalTickets,              Detail: 'All time within filter' });
     sections.push({ Section: '', Metric: 'Open Rate',      Value: openRate + '%',            Detail: `${openCount} open now` });
     sections.push({ Section: '', Metric: 'In Progress',    Value: inProgressCount,           Detail: 'Being worked on' });
@@ -100,8 +179,12 @@ export default function AdminReports() {
       sections.push({ Section: '', Metric: c.name, Value: c.count, Detail: '' });
     });
 
-    downloadCSV(`reports-${timeFilter.replace(/\s+/g, '-').toLowerCase()}-${todayStamp()}.csv`, sections);
-    showToast(`Report exported (${timeFilter})`, 'success');
+    // Filename reflects the active filter — makes downloaded files easy to
+    // organize (e.g., "Report_Jun-2026.csv" vs "Report_This-Week_02-Jul-2026.csv").
+    const filenameSlug = activeLabel.replace(/\s+/g, '-');
+    const stamp = (customDate || customMonth) ? '' : `_${todayStamp()}`;
+    downloadCSV(`Report_${filenameSlug}${stamp}.csv`, sections);
+    showToast(`Report exported (${activeLabel})`, 'success');
   };
 
   const SUMMARY_KPIS = [
@@ -160,28 +243,74 @@ export default function AdminReports() {
             display: 'flex',
             gap: 2,
           }}>
-            {TIME_FILTERS.map(tf => (
-              <button
-                key={tf}
-                onClick={() => setTimeFilter(tf)}
-                style={{
-                  background: timeFilter === tf ? 'var(--blue)' : 'transparent',
-                  color: timeFilter === tf ? '#fff' : 'var(--text-muted)',
-                  border: 'none',
-                  padding: '7px 14px',
-                  borderRadius: 9,
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  fontFamily: 'DM Sans, sans-serif',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {tf}
-              </button>
-            ))}
+            {TIME_FILTERS.map(tf => {
+              // A preset is "active" only when NO custom picker is set — the
+              // custom pickers visually deselect the presets.
+              const active = !customMonth && !customDate && timeFilter === tf;
+              return (
+                <button
+                  key={tf}
+                  onClick={() => pickPreset(tf)}
+                  style={{
+                    background: active ? 'var(--blue)' : 'transparent',
+                    color: active ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    padding: '7px 14px',
+                    borderRadius: 9,
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontFamily: 'DM Sans, sans-serif',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {tf}
+                </button>
+              );
+            })}
           </div>
+
+          {/* Custom month picker — native browser month calendar. */}
+          <input
+            type="month"
+            value={customMonth}
+            onChange={(e) => pickMonth(e.target.value)}
+            title="Pick a specific month"
+            style={{
+              padding: '8px 10px',
+              borderRadius: 10,
+              border: `1px solid ${customMonth ? 'var(--blue)' : 'var(--slate)'}`,
+              background: customMonth ? 'rgba(37,99,235,0.06)' : 'var(--white)',
+              color: customMonth ? 'var(--blue)' : 'var(--text-muted)',
+              fontSize: 12.5,
+              fontWeight: 600,
+              fontFamily: 'DM Sans, sans-serif',
+              cursor: 'pointer',
+              minWidth: 150,
+            }}
+          />
+
+          {/* Custom date picker — native browser date calendar. */}
+          <input
+            type="date"
+            value={customDate}
+            onChange={(e) => pickDate(e.target.value)}
+            title="Pick a specific date"
+            style={{
+              padding: '8px 10px',
+              borderRadius: 10,
+              border: `1px solid ${customDate ? 'var(--blue)' : 'var(--slate)'}`,
+              background: customDate ? 'rgba(37,99,235,0.06)' : 'var(--white)',
+              color: customDate ? 'var(--blue)' : 'var(--text-muted)',
+              fontSize: 12.5,
+              fontWeight: 600,
+              fontFamily: 'DM Sans, sans-serif',
+              cursor: 'pointer',
+              minWidth: 150,
+            }}
+          />
+
           <button onClick={exportCSV} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', fontSize: 14 }}>
             <span className="material-symbols-outlined" style={{ fontSize: 17 }}>file_download</span>
             Export
